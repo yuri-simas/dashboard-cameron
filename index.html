@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- A página tem faturamento real do cliente: fora de buscadores. -->
 <meta name="robots" content="noindex, nofollow, noarchive">
-<title>Dashboard Cameron — protótipo</title>
+<title>Dashboard Cameron</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
@@ -302,7 +302,6 @@ code{background:var(--surface-2); padding:1.5px 6px; border-radius:5px; font-siz
         <div class="marca__sub">Fechamento diário da rede</div>
       </div>
     </div>
-    <span class="pill">Protótipo</span>
     <div class="topo__dir">
       <span class="hoje" id="topoHoje"></span>
       <span class="hoje" id="topoQuem"></span>
@@ -320,6 +319,7 @@ code{background:var(--surface-2); padding:1.5px 6px; border-radius:5px; font-siz
     <button class="aba" role="tab" data-secao="anual" aria-selected="false">Visão anual</button>
     <button class="aba" role="tab" data-secao="comparar" aria-selected="false">Comparações</button>
     <button class="aba" role="tab" data-secao="cadastros" aria-selected="false">Cadastros</button>
+    <button class="aba" role="tab" data-secao="acessos" aria-selected="false" hidden>Acessos</button>
   </div>
 </nav>
 
@@ -330,6 +330,7 @@ code{background:var(--surface-2); padding:1.5px 6px; border-radius:5px; font-siz
   <section class="secao" id="sec-anual"></section>
   <section class="secao" id="sec-comparar"></section>
   <section class="secao" id="sec-cadastros"></section>
+  <section class="secao" id="sec-acessos"></section>
 </main>
 
 <div class="pagina" id="carregando" hidden>
@@ -391,6 +392,7 @@ if (CFG.url && CFG.anonKey && window.supabase) {
     auth: { persistSession: true, autoRefreshToken: true },
   });
 }
+window.sbCliente = sb;   // o app usa para a tela de acessos
 
 function mostrarErro(msg){ elErro.textContent = msg; elErro.hidden = false; }
 function limparErro(){ elErro.hidden = true; }
@@ -466,6 +468,17 @@ async function carregarDados(){
   const hoje = new Date();
   const hojeIso = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
 
+  // quem entrou e com que papel — define o que a tela de acessos deixa fazer
+  let eu = { papel: 'lancamento', nome: '', email: '', id: null };
+  try {
+    const { data: u } = await sb.auth.getUser();
+    const uid = u && u.user ? u.user.id : null;
+    if (uid){
+      const { data: p } = await sb.from('perfis').select('id,nome,papel').eq('id', uid).maybeSingle();
+      if (p) eu = { ...p, email: u.user.email };
+    }
+  } catch(e){ /* segue com o papel mais restrito */ }
+
   let relatorio = {};
   try {
     const { data } = await sb.from('relatorio_importacao').select('conteudo').maybeSingle();
@@ -475,6 +488,7 @@ async function carregarDados(){
   return {
     origem: 'Banco de dados (Supabase)',
     hoje: hojeIso,
+    eu,
     anos,
     unidades,
     metas,

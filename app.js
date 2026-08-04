@@ -12,7 +12,9 @@ const MES_CURTO = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','
 const DIAS_SEM = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 const DIAS_SEM_C = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const ESPECIAIS = new Map(D.datasEspeciais.map(e => [e.data, e]));
-const RASCUNHO = {};   // o que for digitado no protótipo fica só aqui
+const RASCUNHO = {};   // lançamento digitado que ainda não vai para o banco
+const EU = D.eu || { papel: 'lancamento', nome: '', email: '' };
+const SB = window.sbCliente || null;
 
 const dt = s => new Date(+s.slice(0,4), +s.slice(5,7)-1, +s.slice(8,10));
 const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -465,8 +467,8 @@ function telaLancar(){
     <div class="lanc">${feiras.map(item).join('')}</div></div>` : ''}
 
   <div class="rodape-fixo" id="rodapeLanc"></div>
-  <p class="nota">Protótipo: o que você digitar fica só neste navegador e some ao recarregar a página.
-  No app de verdade, cada alteração é gravada com autor, data e valor anterior.</p>`;
+  <p class="nota">O lançamento ainda não está gravando no banco — isso entra na próxima etapa.
+  Por enquanto o que você digitar fica só neste navegador e some ao recarregar a página.</p>`;
 }
 
 function salvarLanc(input){
@@ -1112,9 +1114,160 @@ function telaCadastros(){
 }
 
 /* ================================================================
+   8b. ACESSOS
+   Só a diretoria enxerga esta aba. Aqui se dá e se tira acesso.
+
+   Uma limitação honesta: criar o LOGIN em si (e-mail e senha) exige a
+   chave de administrador do Supabase, e essa chave não pode ficar num
+   site aberto — quem a tivesse leria o banco inteiro sem login. Então o
+   login nasce no painel do Supabase, em dois cliques, e aqui se decide
+   quem entra e com qual papel. É a separação que faz um cadastro
+   esquecido nunca virar acesso indevido.
+   ================================================================ */
+let acessos = null, acessosErro = '';
+
+/* O banco fala em jargão; aqui vira português. */
+function explicarErro(error){
+  const m = (error && error.message) || String(error);
+  if (/row-level security/i.test(m))
+    return 'O banco recusou: seu acesso não tem permissão para isso. Só quem tem perfil de diretoria libera pessoas.';
+  if (/violates foreign key/i.test(m))
+    return 'Esse UID não existe em Authentication → Users. Crie o login primeiro e depois copie o UID de lá.';
+  if (/duplicate key/i.test(m))
+    return 'Essa pessoa já tem acesso. Para mudar o papel, use a lista acima.';
+  if (/JWT|session|not authenticated/i.test(m))
+    return 'Sua sessão expirou. Saia e entre de novo.';
+  return 'Não consegui salvar: ' + m;
+}
+
+async function carregarAcessos(){
+  if (!SB) { acessosErro = 'Sem ligação com o banco.'; return; }
+  const { data, error } = await SB.from('perfis').select('id,nome,papel,criado_em').order('criado_em');
+  if (error){ acessosErro = error.message; acessos = []; return; }
+  acessosErro = ''; acessos = data;
+}
+
+async function salvarAcesso(ev){
+  ev.preventDefault();
+  const uid = document.getElementById('acUid').value.trim();
+  const nome = document.getElementById('acNome').value.trim();
+  const papel = document.getElementById('acPapel').value;
+  const aviso = document.getElementById('acAviso');
+  if (!/^[0-9a-f-]{36}$/i.test(uid)){
+    aviso.textContent = 'O UID tem 36 caracteres, no formato 0000aaaa-0000-0000-0000-000000000000. Copie da lista de Users do Supabase.';
+    return;
+  }
+  aviso.textContent = 'Salvando…';
+  const { error } = await SB.from('perfis').upsert({ id: uid, nome, papel });
+  if (error){ aviso.textContent = explicarErro(error); return; }
+  aviso.textContent = '';
+  await carregarAcessos();
+  render();
+}
+
+async function mudarPapel(id, papel){
+  const { error } = await SB.from('perfis').update({ papel }).eq('id', id);
+  if (error) alert(explicarErro(error));
+  await carregarAcessos(); render();
+}
+
+async function tirarAcesso(id, nome){
+  if (!confirm('Tirar o acesso de ' + nome + '?\n\nA pessoa continua existindo no Supabase, mas para de enxergar qualquer dado do app.')) return;
+  const { error } = await SB.from('perfis').delete().eq('id', id);
+  if (error) alert(explicarErro(error));
+  await carregarAcessos(); render();
+}
+
+function telaAcessos(){
+  if (EU.papel !== 'diretoria'){
+    return `<h2 class="titulo">Acessos</h2>
+      <div class="aviso aviso--info"><span class="aviso__ico">🔒</span><div>
+        <strong>Só a diretoria administra acessos</strong>
+        Seu perfil é <b>${esc(EU.papel)}</b>. Se precisar liberar alguém, peça a quem tem perfil de diretoria.
+      </div></div>`;
+  }
+  if (acessos === null){
+    carregarAcessos().then(render);
+    return `<h2 class="titulo">Acessos</h2><div class="carregando"><div class="carregando__giro"></div><span>Buscando quem tem acesso…</span></div>`;
+  }
+
+  const linha = p => `<tr>
+    <td class="fix"><b>${esc(p.nome)}</b>${p.id === EU.id ? ' <span class="tag">você</span>' : ''}
+      <div style="font-size:11px;color:var(--text-faint);font-family:ui-monospace,monospace">${esc(p.id)}</div></td>
+    <td style="text-align:left">
+      <select onchange="mudarPapel('${p.id}', this.value)" ${p.id === EU.id ? 'disabled title="Você não pode mudar o próprio papel"' : ''}>
+        <option value="diretoria"  ${p.papel==='diretoria'?'selected':''}>Diretoria</option>
+        <option value="lancamento" ${p.papel==='lancamento'?'selected':''}>Lançamento</option>
+      </select></td>
+    <td>${p.criado_em ? dataBrLonga(p.criado_em.slice(0,10)) : '—'}</td>
+    <td>${p.id === EU.id ? '<span class="vazio">—</span>'
+      : `<button class="btn btn--pequeno" onclick="tirarAcesso('${p.id}', ${JSON.stringify(p.nome)})">Tirar acesso</button>`}</td>
+  </tr>`;
+
+  return `
+  <h2 class="titulo">Acessos</h2>
+  <p class="sub">Quem entra no app e o que cada um pode fazer. São ${acessos.length} pessoa${acessos.length===1?'':'s'} com acesso.</p>
+
+  ${acessosErro ? `<div class="aviso aviso--alerta"><span class="aviso__ico">⚠️</span><div>${esc(acessosErro)}</div></div>` : ''}
+
+  <div class="bloco">
+    <div class="rolagem">
+      <table>
+        <thead><tr><th class="fix">Pessoa</th><th style="text-align:left">Papel</th><th>Desde</th><th></th></tr></thead>
+        <tbody>${acessos.map(linha).join('') || '<tr><td colspan="4" class="vazio">Ninguém cadastrado.</td></tr>'}</tbody>
+      </table>
+    </div>
+    <p class="nota"><b>Diretoria</b> vê tudo e mexe em cadastro, meta e acesso.
+    <b>Lançamento</b> lança e corrige venda, mas não mexe em cadastro nem libera ninguém.</p>
+  </div>
+
+  <div class="grade-2 bloco">
+    <div class="card">
+      <div class="card__cab"><p class="card__tit">Liberar uma pessoa</p>
+        <p class="card__sub">O login é criado no Supabase; aqui você libera o acesso dele.</p></div>
+      <div class="card__corpo">
+        <form onsubmit="salvarAcesso(event)">
+          <div class="login__campo"><label for="acNome">Nome</label>
+            <input id="acNome" type="text" required placeholder="Como aparece no app"></div>
+          <div class="login__campo"><label for="acUid">User UID</label>
+            <input id="acUid" type="text" required placeholder="0000aaaa-0000-0000-0000-000000000000"
+                   style="font-family:ui-monospace,monospace;font-size:13px"></div>
+          <div class="login__campo"><label for="acPapel">Papel</label>
+            <select id="acPapel">
+              <option value="lancamento">Lançamento</option>
+              <option value="diretoria">Diretoria</option>
+            </select></div>
+          <button type="submit" class="btn btn--primario login__botao">Liberar acesso</button>
+          <p class="nota" id="acAviso" role="alert"></p>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__cab"><p class="card__tit">Antes disso: criar o login</p>
+        <p class="card__sub">Dois cliques no painel do Supabase.</p></div>
+      <div class="card__corpo">
+        <ul class="lista-limpa">
+          <li><span><b>1.</b> No Supabase, menu <b>Authentication → Users</b></span></li>
+          <li><span><b>2.</b> <b>Add user → Create new user</b></span></li>
+          <li><span><b>3.</b> E-mail e senha, marcando <b>Auto Confirm User</b></span></li>
+          <li><span><b>4.</b> Copie o <b>User UID</b> que aparece na lista</span></li>
+          <li><span><b>5.</b> Cole no formulário ao lado e libere</span></li>
+        </ul>
+        <p class="nota">Criar o login exige uma chave de administrador que não pode ficar num site aberto —
+        quem a tivesse leria o banco inteiro sem passar pelo login. Por isso essa parte fica no painel do
+        Supabase. Criar a conta e dar acesso são dois atos separados: assim, uma conta criada por engano
+        nunca vira acesso ao faturamento.</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ================================================================
    9. NAVEGAÇÃO
    ================================================================ */
-const TELAS = { painel:telaPainel, lancar:telaLancar, mensal:telaMensal, anual:telaAnual, comparar:telaComparar, cadastros:telaCadastros };
+const TELAS = { painel:telaPainel, lancar:telaLancar, mensal:telaMensal, anual:telaAnual,
+                comparar:telaComparar, cadastros:telaCadastros, acessos:telaAcessos };
 let secaoAtual = 'painel';
 
 function render(){
@@ -1166,4 +1319,6 @@ document.addEventListener('keydown', e => {
 });
 
 document.getElementById('topoHoje').textContent = 'Hoje: ' + dataBrLonga(HOJE);
+// a aba de acessos só existe para a diretoria
+document.querySelector('.aba[data-secao="acessos"]').hidden = EU.papel !== 'diretoria';
 render();
