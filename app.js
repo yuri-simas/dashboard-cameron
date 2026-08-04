@@ -1147,22 +1147,47 @@ async function carregarAcessos(){
   acessosErro = ''; acessos = data;
 }
 
-async function salvarAcesso(ev){
+/* Cria o login e libera o acesso de uma vez. Quem faz o trabalho é a
+   Edge Function "criar-usuario", no servidor do Supabase: é lá que a
+   chave de administrador pode existir sem ficar exposta no site. */
+async function criarUsuario(ev){
   ev.preventDefault();
-  const uid = document.getElementById('acUid').value.trim();
-  const nome = document.getElementById('acNome').value.trim();
+  const nome  = document.getElementById('acNome').value.trim();
+  const email = document.getElementById('acEmail').value.trim();
+  const senha = document.getElementById('acSenha').value;
   const papel = document.getElementById('acPapel').value;
   const aviso = document.getElementById('acAviso');
-  if (!/^[0-9a-f-]{36}$/i.test(uid)){
-    aviso.textContent = 'O UID tem 36 caracteres, no formato 0000aaaa-0000-0000-0000-000000000000. Copie da lista de Users do Supabase.';
+  const botao = document.getElementById('acBotao');
+
+  if (senha.length < 8){ aviso.textContent = 'A senha precisa de pelo menos 8 caracteres.'; return; }
+
+  botao.disabled = true; botao.textContent = 'Criando…';
+  aviso.textContent = '';
+
+  const { data, error } = await SB.functions.invoke('criar-usuario', {
+    body: { nome, email, senha, papel },
+  });
+
+  botao.disabled = false; botao.textContent = 'Criar acesso';
+
+  // a função devolve o motivo no corpo, mesmo quando o status é de erro
+  const motivo = (data && data.erro) || (error && error.message);
+  if (motivo){
+    aviso.textContent = /Failed to send|fetch/i.test(motivo)
+      ? 'Não consegui falar com o servidor. A função "criar-usuario" já foi publicada no Supabase?'
+      : motivo;
     return;
   }
-  aviso.textContent = 'Salvando…';
-  const { error } = await SB.from('perfis').upsert({ id: uid, nome, papel });
-  if (error){ aviso.textContent = explicarErro(error); return; }
-  aviso.textContent = '';
+
+  document.getElementById('formAcesso').reset();
+  aviso.textContent = data.jaExistia
+    ? `${data.nome} já tinha login; liberei o acesso.`
+    : `${data.nome} criado. Passe o e-mail e a senha para a pessoa.`;
   await carregarAcessos();
+  const guardar = aviso.textContent;
   render();
+  const novo = document.getElementById('acAviso');
+  if (novo) novo.textContent = guardar;
 }
 
 async function mudarPapel(id, papel){
@@ -1223,44 +1248,61 @@ function telaAcessos(){
 
   <div class="grade-2 bloco">
     <div class="card">
-      <div class="card__cab"><p class="card__tit">Liberar uma pessoa</p>
-        <p class="card__sub">O login é criado no Supabase; aqui você libera o acesso dele.</p></div>
+      <div class="card__cab"><p class="card__tit">Criar um acesso</p>
+        <p class="card__sub">Cria o login e libera de uma vez. A pessoa já entra com o que você digitar aqui.</p></div>
       <div class="card__corpo">
-        <form onsubmit="salvarAcesso(event)">
+        <form id="formAcesso" onsubmit="criarUsuario(event)" autocomplete="off">
           <div class="login__campo"><label for="acNome">Nome</label>
             <input id="acNome" type="text" required placeholder="Como aparece no app"></div>
-          <div class="login__campo"><label for="acUid">User UID</label>
-            <input id="acUid" type="text" required placeholder="0000aaaa-0000-0000-0000-000000000000"
-                   style="font-family:ui-monospace,monospace;font-size:13px"></div>
+          <div class="login__campo"><label for="acEmail">E-mail</label>
+            <input id="acEmail" type="email" required placeholder="pessoa@empresa.com.br" autocomplete="off"></div>
+          <div class="login__campo"><label for="acSenha">Senha inicial</label>
+            <input id="acSenha" type="text" required minlength="8" placeholder="mínimo 8 caracteres" autocomplete="new-password">
+            <button type="button" class="btn btn--pequeno" style="align-self:flex-start"
+                    onclick="sortearSenha()">Sortear uma senha</button></div>
           <div class="login__campo"><label for="acPapel">Papel</label>
             <select id="acPapel">
               <option value="lancamento">Lançamento</option>
               <option value="diretoria">Diretoria</option>
             </select></div>
-          <button type="submit" class="btn btn--primario login__botao">Liberar acesso</button>
+          <button type="submit" class="btn btn--primario login__botao" id="acBotao">Criar acesso</button>
           <p class="nota" id="acAviso" role="alert"></p>
         </form>
       </div>
     </div>
 
     <div class="card">
-      <div class="card__cab"><p class="card__tit">Antes disso: criar o login</p>
-        <p class="card__sub">Dois cliques no painel do Supabase.</p></div>
+      <div class="card__cab"><p class="card__tit">Como funciona</p>
+        <p class="card__sub">Por que criar usuário não é só mais um formulário.</p></div>
       <div class="card__corpo">
         <ul class="lista-limpa">
-          <li><span><b>1.</b> No Supabase, menu <b>Authentication → Users</b></span></li>
-          <li><span><b>2.</b> <b>Add user → Create new user</b></span></li>
-          <li><span><b>3.</b> E-mail e senha, marcando <b>Auto Confirm User</b></span></li>
-          <li><span><b>4.</b> Copie o <b>User UID</b> que aparece na lista</span></li>
-          <li><span><b>5.</b> Cole no formulário ao lado e libere</span></li>
+          <li><span>A senha que você digitar é a <b>senha inicial</b> da pessoa. Passe para ela por um canal
+            seguro — de preferência não por grupo de mensagem.</span></li>
+          <li><span>O acesso vale <b>na hora</b>: não há e-mail de confirmação para a pessoa clicar.</span></li>
+          <li><span>Se o e-mail já tiver login, o app <b>não cria outro</b> — só libera o acesso dele.</span></li>
+          <li><span><b>Tirar acesso</b> na lista acima não apaga a conta: a pessoa simplesmente para de
+            enxergar qualquer número.</span></li>
         </ul>
-        <p class="nota">Criar o login exige uma chave de administrador que não pode ficar num site aberto —
-        quem a tivesse leria o banco inteiro sem passar pelo login. Por isso essa parte fica no painel do
-        Supabase. Criar a conta e dar acesso são dois atos separados: assim, uma conta criada por engano
-        nunca vira acesso ao faturamento.</p>
+        <p class="nota">Criar conta exige uma chave de administrador, que leria o banco inteiro sem passar por
+        login. Ela não está neste site: fica guardada numa função no servidor do Supabase, que antes de criar
+        qualquer coisa confere se quem pediu é da diretoria. É por isso que o botão acima existe sem abrir
+        um buraco.</p>
       </div>
     </div>
   </div>`;
+}
+
+/* Senha inicial decente, para ninguém cair no "123456". */
+function sortearSenha(){
+  const letras = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  const aleatorio = new Uint32Array(14);
+  crypto.getRandomValues(aleatorio);
+  for (const n of aleatorio) s += letras[n % letras.length];
+  const campo = document.getElementById('acSenha');
+  campo.value = s;
+  campo.focus();
+  campo.select();
 }
 
 /* ================================================================
