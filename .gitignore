@@ -1,0 +1,14 @@
+# O repositório é público e o site é servido a partir dele.
+# Nada que contenha faturamento pode entrar aqui.
+
+# material comercial
+RESUMO-PROPOSTA.md
+
+# dados reais da rede — vivem no banco, não no site
+dados.js
+supabase/lancamentos.csv
+supabase/03-cadastros.sql
+supabase/05-relatorio-dados.sql
+
+# junta os 5 SQL num arquivo só, então carrega as metas e a conferência junto
+supabase/TUDO-EM-UM.sql
