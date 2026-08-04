@@ -12,7 +12,6 @@ const MES_CURTO = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','
 const DIAS_SEM = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 const DIAS_SEM_C = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const ESPECIAIS = new Map(D.datasEspeciais.map(e => [e.data, e]));
-const RASCUNHO = {};   // lançamento digitado que ainda não vai para o banco
 const EU = D.eu || { papel: 'lancamento', nome: '', email: '' };
 const SB = window.sbCliente || null;
 
@@ -66,7 +65,7 @@ const varPct = (a,b) => (b ? a*100/b - 100 : null);
 const mostraVar = v => v === null ? '<span class="vazio">—</span>' : `<span class="${classeVar(v)}">${pct(v)}</span>`;
 
 /* ---------- consultas ---------- */
-const valoresDoDia = data => Object.assign({}, D.lancamentos[data] || {}, RASCUNHO[data] || {});
+const valoresDoDia = data => D.lancamentos[data] || {};
 function valor(data, id){ const v = valoresDoDia(data)[id]; return typeof v === 'number' ? v : null; }
 function totalDoDia(data, filtro){
   let t = 0;
@@ -169,7 +168,9 @@ function unidadesEsperadasEm(data){
 }
 function pendenciasDe(data){
   const dia = valoresDoDia(data);
-  return unidadesEsperadasEm(data).filter(u => !(u.id in dia));
+  const fechadas = D.naoAbriu[data] || {};
+  // quem foi marcado como "não abriu" está resolvido: não é pendência
+  return unidadesEsperadasEm(data).filter(u => !(u.id in dia) && !fechadas[u.id]);
 }
 
 const ANO_ATUAL = anoDe(HOJE), MES_ATUAL = mesDe(HOJE);
@@ -458,16 +459,22 @@ function telaLancar(){
   const lojas = lista.filter(ehLoja), feiras = lista.filter(ehFeira);
   const esp = ESPECIAIS.get(data);
 
+  const fechadas = D.naoAbriu[data] || {};
   const item = u => {
     const v = dia[u.id], ok = typeof v === 'number';
-    return `<label class="lanc__item ${ok?'preenchido':''}">
+    const fechada = !!fechadas[u.id];
+    return `<div class="lanc__item ${ok?'preenchido':''} ${fechada?'fechada':''}">
       <span class="lanc__nome"><b>${esc(u.nome)}</b>
-        <small>${esc(u.tipo)}${u.grupo?' · '+esc(u.grupo):''}</small></span>
-      <span class="lanc__moeda"><span aria-hidden="true">R$</span>
+        <small class="lanc__recado">${fechada ? 'não abriu' : esc(u.tipo)+(u.grupo?' · '+esc(u.grupo):'')}</small></span>
+      ${fechada ? '' : `<span class="lanc__moeda"><span aria-hidden="true">R$</span>
         <input type="text" inputmode="decimal" placeholder="—" value="${ok?moeda(v):''}"
                aria-label="Valor de ${esc(u.nome)} em reais"
                data-uni="${u.id}" onfocus="this.select()"
-               onchange="salvarLanc(this)" oninput="somarRodape()"></span></label>`;
+               onchange="salvarLanc(this)" oninput="somarRodape()"></span>`}
+      <button type="button" class="lanc__fechou" data-uni="${u.id}" onclick="alternarNaoAbriu(this)"
+              title="${fechada?'Desmarcar':'Marcar que não abriu neste dia'}"
+              aria-label="${fechada?'Desmarcar não abriu':'Marcar que não abriu'}">${fechada?'↩':'✕'}</button>
+    </div>`;
   };
 
   return `
@@ -494,23 +501,102 @@ function telaLancar(){
     <div class="lanc">${feiras.map(item).join('')}</div></div>` : ''}
 
   <div class="rodape-fixo" id="rodapeLanc"></div>
-  <p class="nota">O lançamento ainda não está gravando no banco — isso entra na próxima etapa.
-  Por enquanto o que você digitar fica só neste navegador e some ao recarregar a página.</p>`;
+  <p class="nota">Cada valor é gravado assim que você sai do campo — não existe botão de salvar.
+  O ✕ marca que a unidade <b>não abriu</b> no dia: fica registrado, mas não entra como venda zero,
+  para não puxar a média para baixo. Toda alteração guarda quem fez e qual era o valor anterior.</p>`;
 }
 
-function salvarLanc(input){
-  const id = input.dataset.uni;
-  (RASCUNHO[dataLancamento] ||= {});
-  const valor = lerMoeda(input.value);
-  if (valor === null){
-    delete RASCUNHO[dataLancamento][id];
-    input.value = '';
-  } else {
-    RASCUNHO[dataLancamento][id] = valor;
-    input.value = moeda(valor);      // devolve formatado: 7361 vira 7.361,00
+/* ---------- gravar ----------
+   Uma linha por unidade e por dia. O par (unidade, data) é único no banco,
+   então gravar duas vezes o mesmo dia corrige, não duplica. O gatilho do
+   banco registra sozinho quem alterou e qual era o valor anterior.        */
+
+// mantém as listas de datas em dia quando um dia novo é lançado
+function registrarData(data){
+  if (DATAS.includes(data)) return;
+  DATAS.push(data); DATAS.sort();
+  const k = anoDe(data)*100 + mesDe(data);
+  const lista = DATAS_POR_MES.get(k) || DATAS_POR_MES.set(k, []).get(k);
+  lista.push(data); lista.sort();
+  if (!ANOS.includes(anoDe(data))) { ANOS.push(anoDe(data)); ANOS.sort(); }
+}
+
+function marcarItem(el, estado, recado){
+  el.classList.remove('salvando','salvo','erro');
+  if (estado) el.classList.add(estado);
+  const aviso = el.querySelector('.lanc__recado');
+  if (aviso) aviso.textContent = recado || '';
+  if (estado === 'salvo') setTimeout(() => el.classList.remove('salvo'), 1400);
+}
+
+async function gravarLancamento(id, data, valor, naoAbriu){
+  if (!SB) throw new Error('Sem ligação com o banco.');
+  if (valor === null && !naoAbriu){
+    const { error } = await SB.from('lancamentos').delete().eq('unidade_id', id).eq('data', data);
+    if (error) throw error;
+    if (D.lancamentos[data]) delete D.lancamentos[data][id];
+    if (D.naoAbriu[data]) delete D.naoAbriu[data][id];
+    return;
   }
-  input.closest('.lanc__item').classList.toggle('preenchido', input.value !== '');
+  const linha = {
+    unidade_id: id, data,
+    valor_centavos: naoAbriu ? 0 : Math.round(valor * 100),
+    nao_abriu: !!naoAbriu,
+  };
+  const { error } = await SB.from('lancamentos').upsert(linha, { onConflict: 'unidade_id,data' });
+  if (error) throw error;
+
+  registrarData(data);
+  if (naoAbriu){
+    (D.naoAbriu[data] ||= {})[id] = true;
+    if (D.lancamentos[data]) delete D.lancamentos[data][id];
+  } else {
+    (D.lancamentos[data] ||= {})[id] = valor;
+    if (D.naoAbriu[data]) delete D.naoAbriu[data][id];
+  }
+}
+
+async function salvarLanc(input){
+  const id = input.dataset.uni;
+  const data = dataLancamento;
+  const item = input.closest('.lanc__item');
+  const valor = lerMoeda(input.value);
+
+  input.value = valor === null ? '' : moeda(valor);   // 7361 vira 7.361,00
+  item.classList.toggle('preenchido', valor !== null);
   somarRodape();
+
+  marcarItem(item, 'salvando', 'salvando…');
+  try {
+    await gravarLancamento(id, data, valor, false);
+    marcarItem(item, 'salvo', valor === null ? 'apagado' : 'salvo');
+  } catch (e){
+    marcarItem(item, 'erro', explicarErroLancamento(e));
+  }
+}
+
+async function alternarNaoAbriu(botao){
+  const id = botao.dataset.uni;
+  const data = dataLancamento;
+  const item = botao.closest('.lanc__item');
+  const marcado = !(D.naoAbriu[data] && D.naoAbriu[data][id]);
+
+  marcarItem(item, 'salvando', 'salvando…');
+  try {
+    await gravarLancamento(id, data, marcado ? null : null, marcado);
+    render();
+  } catch (e){
+    marcarItem(item, 'erro', explicarErroLancamento(e));
+  }
+}
+
+function explicarErroLancamento(e){
+  const msg = (e && e.message) || String(e);
+  if (/row-level security|violates|permission/i.test(msg))
+    return 'Seu acesso não permite essa alteração.';
+  if (/Failed to fetch|NetworkError/i.test(msg))
+    return 'Sem internet. O valor não foi gravado.';
+  return msg;
 }
 function mudarDia(n){ dataLancamento = iso(new Date(dt(dataLancamento).getTime()+n*86400000)); render(); }
 function somarRodape(){

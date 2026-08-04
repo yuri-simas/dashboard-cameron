@@ -222,6 +222,19 @@ svg.grafico{display:block; width:100%; height:auto; min-width:520px}
   transition:border-color .15s ease}
 .lanc__item:hover{border-color:var(--line-strong)}
 .lanc__item.preenchido{border-color:var(--pos); box-shadow:inset 3px 0 0 var(--pos)}
+/* estados de gravação: o valor vai para o banco ao sair do campo */
+.lanc__item.salvando{opacity:.65}
+.lanc__item.salvo{border-color:var(--pos); box-shadow:inset 3px 0 0 var(--pos), 0 0 0 2px color-mix(in srgb, var(--pos) 28%, transparent)}
+.lanc__item.erro{border-color:var(--neg); box-shadow:inset 3px 0 0 var(--neg)}
+.lanc__item.erro .lanc__recado{color:var(--neg); font-weight:600}
+.lanc__item.salvo .lanc__recado{color:var(--pos); font-weight:600}
+.lanc__item.fechada{opacity:.7; border-style:dashed}
+.lanc__item.fechada .lanc__recado{color:var(--warn); font-weight:600; text-transform:uppercase; letter-spacing:.6px}
+.lanc__fechou{flex:none; width:32px; height:32px; border-radius:var(--radius-p); cursor:pointer;
+  background:none; border:1px solid var(--line); color:var(--text-faint); font-size:13px;
+  transition:border-color .15s ease, color .15s ease}
+.lanc__fechou:hover{border-color:var(--warn); color:var(--warn)}
+.lanc__item.fechada .lanc__fechou{border-color:var(--warn); color:var(--warn)}
 .lanc__nome{flex:1; min-width:0}
 .lanc__nome b{display:block; font-size:13.5px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .lanc__nome small{color:var(--text-faint); font-size:11px}
@@ -445,10 +458,13 @@ async function carregarDados(){
     throw erro;
   }
 
+  // "não abriu" fica separado: é dia registrado, mas não é venda zero —
+  // se entrasse como 0 puxaria a média da loja para baixo.
   const lancamentos = {};
+  const naoAbriu = {};
   for (const l of lancRaw){
-    if (l.nao_abriu) continue;                      // "não abriu" não é venda zero
-    (lancamentos[l.data] ||= {})[l.unidade_id] = Math.round(Number(l.valor));
+    if (l.nao_abriu) { (naoAbriu[l.data] ||= {})[l.unidade_id] = true; continue; }
+    (lancamentos[l.data] ||= {})[l.unidade_id] = Number(l.valor);
   }
 
   const anos = [...new Set(Object.keys(lancamentos).map(d => +d.slice(0,4)))].sort();
@@ -504,6 +520,7 @@ async function carregarDados(){
     unidades,
     metas,
     lancamentos,
+    naoAbriu,
     datasEspeciais: especiais,
     dePara: relatorio.dePara || [],
     conferencia: relatorio.conferencia || [],
