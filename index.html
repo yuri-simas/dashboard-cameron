@@ -225,7 +225,18 @@ svg.grafico{display:block; width:100%; height:auto; min-width:520px}
 .lanc__nome{flex:1; min-width:0}
 .lanc__nome b{display:block; font-size:13.5px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .lanc__nome small{color:var(--text-faint); font-size:11px}
-.lanc__item input{width:118px; text-align:right; font-weight:600; font-variant-numeric:tabular-nums}
+/* O "R$" fica fora do campo, para o que a pessoa digita ser só o número.
+   A borda é desenhada no conjunto, então os dois parecem um campo só. */
+.lanc__moeda{display:flex; align-items:center; gap:6px; flex:none;
+  background:var(--surface); border:1px solid var(--line-strong);
+  border-radius:var(--radius-p); padding:0 10px; transition:border-color .15s ease}
+.lanc__moeda:focus-within{border-color:var(--brand-blue-2);
+  box-shadow:0 0 0 2px color-mix(in srgb, var(--brand-blue-2) 25%, transparent)}
+.lanc__moeda>span{font-size:12px; font-weight:600; color:var(--text-faint); user-select:none}
+.lanc__item input{width:104px; text-align:right; font-weight:600; font-variant-numeric:tabular-nums;
+  border:0; background:none; padding:9px 0; min-height:0; border-radius:0}
+.lanc__item input:hover{border:0}
+.lanc__item input:focus-visible{outline:none}
 .rodape-fixo{position:sticky; bottom:0; z-index:20; margin-top:16px; background:var(--surface);
   border:1px solid var(--line-strong); border-radius:var(--radius); box-shadow:var(--shadow-alta);
   padding:14px 18px; display:flex; flex-wrap:wrap; gap:20px; align-items:center}

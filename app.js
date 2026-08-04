@@ -33,6 +33,30 @@ const brlCurto = n => {
   return brl(n);
 };
 const num = n => Math.round(n).toLocaleString('pt-BR');
+
+/* ---------- dinheiro nos campos de lançamento ----------
+   O campo é de texto, não de número: <input type="number"> não aceita
+   ponto de milhar nem vírgula decimal, que é como a pessoa lê o valor
+   no relatório do caixa.                                              */
+const moeda = n => Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Aceita como a pessoa digitar: 7361 · 7.361 · 7361,50 · 7.361,50 · 7361.50
+function lerMoeda(txt){
+  const limpo = String(txt ?? '').replace(/[^\d.,-]/g, '').trim();
+  if (!limpo) return null;
+  let normal;
+  if (limpo.includes(',')) {
+    // tem vírgula: ela é o decimal e os pontos são separador de milhar
+    normal = limpo.replace(/\./g, '').replace(',', '.');
+  } else if (/\.\d{3}(?:\D|$)/.test(limpo)) {
+    // "1.234" ou "1.234.567": ponto agrupando três dígitos é milhar
+    normal = limpo.replace(/\./g, '');
+  } else {
+    normal = limpo;   // "1234" ou "1234.50"
+  }
+  const n = parseFloat(normal);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
 const pct = n => (n>0?'+':'') + n.toLocaleString('pt-BR',{maximumFractionDigits:1}) + '%';
 const dataBr = s => `${s.slice(8,10)}/${s.slice(5,7)}`;
 const dataBrLonga = s => `${s.slice(8,10)}/${s.slice(5,7)}/${s.slice(0,4)}`;
@@ -439,8 +463,11 @@ function telaLancar(){
     return `<label class="lanc__item ${ok?'preenchido':''}">
       <span class="lanc__nome"><b>${esc(u.nome)}</b>
         <small>${esc(u.tipo)}${u.grupo?' · '+esc(u.grupo):''}</small></span>
-      <input type="number" inputmode="numeric" placeholder="—" value="${ok?v:''}"
-             data-uni="${u.id}" onchange="salvarLanc(this)" oninput="somarRodape()"></label>`;
+      <span class="lanc__moeda"><span aria-hidden="true">R$</span>
+        <input type="text" inputmode="decimal" placeholder="—" value="${ok?moeda(v):''}"
+               aria-label="Valor de ${esc(u.nome)} em reais"
+               data-uni="${u.id}" onfocus="this.select()"
+               onchange="salvarLanc(this)" oninput="somarRodape()"></span></label>`;
   };
 
   return `
@@ -474,8 +501,14 @@ function telaLancar(){
 function salvarLanc(input){
   const id = input.dataset.uni;
   (RASCUNHO[dataLancamento] ||= {});
-  if (input.value === '') delete RASCUNHO[dataLancamento][id];
-  else RASCUNHO[dataLancamento][id] = Math.round(+input.value);
+  const valor = lerMoeda(input.value);
+  if (valor === null){
+    delete RASCUNHO[dataLancamento][id];
+    input.value = '';
+  } else {
+    RASCUNHO[dataLancamento][id] = valor;
+    input.value = moeda(valor);      // devolve formatado: 7361 vira 7.361,00
+  }
   input.closest('.lanc__item').classList.toggle('preenchido', input.value !== '');
   somarRodape();
 }
@@ -485,16 +518,18 @@ function somarRodape(){
   if (!el) return;
   let lojas=0, feiras=0, n=0;
   document.querySelectorAll('#sec-lancar input[data-uni]').forEach(i=>{
-    if (i.value === '') return;
-    const u = porId.get(i.dataset.uni); const v = +i.value || 0; n++;
-    if (ehLoja(u)) lojas += v; else feiras += v;
+    const v = lerMoeda(i.value);          // soma ao vivo, mesmo meio digitado
+    if (v === null) return;
+    n++;
+    if (ehLoja(porId.get(i.dataset.uni))) lojas += v; else feiras += v;
   });
   const rm = resumoMes(anoDe(dataLancamento), mesDe(dataLancamento));
   const total = lojas+feiras;
+  // aqui vai com centavos: é a tela onde o valor é conferido contra o caixa
   el.innerHTML = `
-    <div class="item"><span>Lojas</span><b>${brl(lojas)}</b></div>
-    <div class="item"><span>Feiras</span><b>${brl(feiras)}</b></div>
-    <div class="item grande"><span>Total do dia · ${n} lançadas</span><b>${brl(total)}</b></div>
+    <div class="item"><span>Lojas</span><b>R$ ${moeda(lojas)}</b></div>
+    <div class="item"><span>Feiras</span><b>R$ ${moeda(feiras)}</b></div>
+    <div class="item grande"><span>Total do dia · ${n} lançadas</span><b>R$ ${moeda(total)}</b></div>
     <div class="item"><span>Contra a média do mês</span><b class="${classeVar(varPct(total,rm.media))}">${total&&rm.media?pct(varPct(total,rm.media)):'—'}</b></div>`;
 }
 
