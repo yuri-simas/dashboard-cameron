@@ -846,9 +846,28 @@ function alternarAno(a){
   else anosVisiveis.add(a);
   render();
 }
+function seletorAnoAnual(){
+  const anos = [...new Set([...ANOS, anoSel])].sort();
+  return `<div class="controles" style="margin-bottom:0"><div class="campo"><span>Ano</span>
+    <select onchange="anoSel=+this.value;render()">
+      ${anos.map(a=>`<option value="${a}" ${a===anoSel?'selected':''}>${a}</option>`).join('')}
+    </select></div></div>`;
+}
+
 function telaAnual(){
   const ano = anoSel;
   const meses = mesesDoAno(ano);
+  // ano sem nenhum lançamento — acontece na virada, antes do primeiro dia lançado
+  if (!meses.length){
+    return `<h2 class="titulo">Visão anual</h2>
+      <p class="sub">Os três anos na mesma tela, mês a mês.</p>
+      ${seletorAnoAnual()}
+      <div class="aviso aviso--info"><span class="aviso__ico">📅</span><div>
+        <strong>Nenhum lançamento em ${ano}</strong>
+        Assim que o primeiro dia for lançado, esta tela se monta sozinha.
+        ${ANOS.length ? `Anos com movimento: ${ANOS.join(', ')}.` : ''}
+      </div></div>`;
+  }
   const unis = UNI.filter(u => u.anos.includes(ano));
   const lojas = unis.filter(ehLoja), feiras = unis.filter(ehFeira);
   const total = totalAno(ano), tLojas = totalAno(ano, ehLoja);
@@ -893,10 +912,7 @@ function telaAnual(){
   <p class="sub">A aba Totais da planilha, atualizada sozinha — e com os três anos na mesma tela.</p>
 
   <div class="controles">
-    <div class="campo"><span>Ano</span>
-      <select onchange="anoSel=+this.value;render()">
-        ${ANOS.map(a=>`<option value="${a}" ${a===ano?'selected':''}>${a}</option>`).join('')}
-      </select></div>
+    ${seletorAnoAnual()}
     <span class="nota" style="margin:0">${meses.length} meses com lançamento · ${unis.length} unidades</span>
   </div>
 
@@ -1130,32 +1146,74 @@ function telaComparar(){
    ================================================================ */
 let metaAno = ANO_ATUAL, metaMesSel = MES_ATUAL, metaPct = 85;
 
+const mediana = arr => {
+  if (!arr.length) return 0;
+  const o = [...arr].sort((a,b)=>a-b), m = Math.floor(o.length/2);
+  return o.length % 2 ? o[m] : (o[m-1] + o[m]) / 2;
+};
+
+/* Fecha o mês de uma unidade. Se o mês está incompleto, completa pela média
+   diária: 20 dias a 400 valem 12.400 no mês, não 8.000.                    */
+function mesFechado(id, ano, mes){
+  const dias = datasDoMes(ano, mes).filter(d => valor(d, id) !== null);
+  if (!dias.length) return null;
+  const total = dias.reduce((s,d)=>s+valor(d,id), 0);
+  const noMes = diasNoMes(ano, mes);
+  return { ano, total, dias: dias.length, diasDoMes: noMes,
+           cheio: dias.length >= noMes ? total : (total/dias.length)*noMes };
+}
+
+/* Mês fora da curva da própria unidade.
+   Existe por causa das figurinhas da Copa: maio/2026 foi 4x o normal, e uma
+   meta de 2027 tirada dali nasceria impossível. Compara com a MEDIANA dos
+   outros meses do mesmo ano — mediana, e não média, justamente para o mês
+   excepcional não puxar a própria referência.                              */
+function mesAtipico(id, ano, mes){
+  const base = mesFechado(id, ano, mes);
+  if (!base) return null;
+  const outros = MESES.map((_,i)=>i+1).filter(m => m !== mes)
+    .map(m => mesFechado(id, ano, m)).filter(Boolean).map(x => x.cheio);
+  if (outros.length < 3) return null;        // base curta demais para julgar
+  const med = mediana(outros);
+  if (!med) return null;
+  const razao = base.cheio / med;
+  if (razao >= 2 || razao <= 0.5){
+    return { razao, motivo: `${razao.toFixed(1)}× a mediana dos outros meses de ${ano}` };
+  }
+  return null;
+}
+
 /* A sugestão sai do histórico, não de um chute. Em ordem de preferência:
      1. o mesmo mês do ano anterior
-     2. se aquele mês não existir (unidade nova, feira que não rodou),
-        o mesmo mês de dois anos atrás
-     3. sem nada disso, a média dos meses já lançados da própria unidade
-   O percentual da regra da rede entra por cima do que for encontrado.   */
+     2. se aquele mês não existir, o mesmo mês de dois ou três anos atrás
+     3. sem nada disso, a média dos outros meses da própria unidade
+   Quando a base escolhida é um mês fora da curva, a sugestão vem marcada e,
+   se houver um ano limpo, ele é oferecido como alternativa.               */
 function sugestaoMeta(id, ano, mes, pct){
-  const noAno = a => {
-    const dias = datasDoMes(a, mes).filter(d => valor(d, id) !== null);
-    if (!dias.length) return null;
-    return { total: dias.reduce((s,d)=>s+valor(d,id), 0), dias: dias.length, ano: a };
-  };
-  const base = noAno(ano-1) || noAno(ano-2);
-  if (base){
-    // mês incompleto no passado não pode virar meta cheia: completa pela média
-    const diasDoMes = diasNoMes(base.ano, mes);
-    const cheio = base.dias >= diasDoMes ? base.total : (base.total / base.dias) * diasDoMes;
-    return { valor: cheio * pct / 100, referencia: cheio, origem: `${MESES[mes-1]} de ${base.ano}`,
-             parcial: base.dias < diasDoMes, dias: base.dias, diasDoMes };
+  const candidatos = [ano-1, ano-2, ano-3].map(a => mesFechado(id, a, mes)).filter(Boolean);
+
+  if (candidatos.length){
+    const base = candidatos[0];
+    const atipico = mesAtipico(id, base.ano, mes);
+    const monta = (b) => ({
+      valor: b.cheio * pct / 100, referencia: b.cheio,
+      origem: `${MESES[mes-1]} de ${b.ano}`,
+      parcial: b.dias < b.diasDoMes, dias: b.dias, diasDoMes: b.diasDoMes,
+    });
+    const sug = monta(base);
+    sug.atipico = atipico;
+    // ano limpo mais próximo, para oferecer como saída
+    const limpo = candidatos.slice(1).find(b => !mesAtipico(id, b.ano, mes));
+    sug.alternativa = (atipico && limpo) ? monta(limpo) : null;
+    return sug;
   }
-  // nenhum ano anterior: usa o ritmo da própria unidade neste ano
+
   const meses = mesesDoAno(ano).filter(m => m !== mes && totalUnidadeMes(id, ano, m) > 0);
   if (!meses.length) return null;
   const media = meses.reduce((s,m)=>s+totalUnidadeMes(id,ano,m),0) / meses.length;
   return { valor: media * pct / 100, referencia: media,
-           origem: `média dos outros meses de ${ano}`, parcial: false };
+           origem: `média dos outros meses de ${ano}`, parcial: false,
+           atipico: null, alternativa: null };
 }
 
 function telaMetas(){
@@ -1181,8 +1239,13 @@ function telaMetas(){
       <td class="fix">${esc(u.nome)}
         <span class="tag ${u.bloco==='lojas'?'tag--loja':'tag--feira'}">${u.bloco==='lojas'?'loja':'feira'}</span></td>
       <td>${realAnterior?num(realAnterior):'<span class="vazio">—</span>'}</td>
-      <td>${sug?`<span title="${esc(sug.origem)}${sug.parcial?` · ${sug.dias} de ${sug.diasDoMes} dias, completado pela média`:''}">${num(sug.valor)}</span>`
-             :'<span class="vazio">sem base</span>'}</td>
+      <td>${!sug ? '<span class="vazio">sem base</span>' : `
+        <span class="${sug.atipico?'sug-alerta':''}"
+              title="${esc(sug.origem)}${sug.parcial?` · ${sug.dias} de ${sug.diasDoMes} dias, completado pela média`:''}${sug.atipico?` · MÊS FORA DA CURVA: ${esc(sug.atipico.motivo)}`:''}">
+          ${sug.atipico?'⚠ ':''}${num(sug.valor)}</span>
+        ${sug.alternativa?`<div style="margin-top:3px"><button type="button" class="btn btn--pequeno"
+             onclick="usarAlternativa('${u.id}')"
+             title="Usar ${esc(sug.alternativa.origem)}: ${brl(sug.alternativa.valor)}">usar ${sug.alternativa.origem.split(' de ')[1]}</button></div>`:''}`}</td>
       <td>
         <span class="lanc__moeda" style="display:inline-flex"><span aria-hidden="true">R$</span>
           <input type="text" inputmode="decimal" placeholder="—" style="width:96px"
@@ -1266,21 +1329,25 @@ function telaMetas(){
         </tr></tfoot>
       </table>
     </div>
-    <p class="nota">A sugestão usa o mesmo mês do ano anterior; se a unidade não existia, usa dois anos atrás;
+    <p class="nota">A sugestão usa o mesmo mês do ano anterior; se a unidade não existia, usa dois ou três anos atrás;
     se não houver nada, usa a média dos outros meses dela. Quando o mês do passado está incompleto,
     a conta completa pela média diária em vez de tratar o mês como menor do que foi —
     passe o mouse sobre a sugestão para ver de onde ela saiu.</p>
+    <p class="nota"><b>⚠ marca mês fora da curva</b> — quando a base é o dobro ou menos da metade da mediana
+    dos outros meses daquela unidade. Foi o caso de maio e junho de 2026, com as figurinhas da Copa: uma meta
+    de 2027 tirada dali nasceria impossível. Quando existe um ano limpo, aparece o botão para usá-lo, e o
+    preenchimento em lote troca a base sozinho — avisando quais unidades trocou.</p>
   </div>`;
 }
 
-async function salvarMeta(input){
+async function salvarMeta(input, referencia = null){
   const id = input.dataset.meta;
   const cel = input.closest('tr').querySelector('[data-recado]');
   const v = lerMoeda(input.value);
   input.value = v === null ? '' : moeda(v);
   cel.textContent = 'salvando…';
   try {
-    await gravarMeta(id, metaAno, metaMesSel, v);
+    await gravarMeta(id, metaAno, metaMesSel, v, referencia);
     cel.textContent = v === null ? 'apagada' : 'salva';
     setTimeout(()=>{ if (cel.isConnected) cel.textContent=''; }, 1500);
   } catch(e){
@@ -1288,7 +1355,11 @@ async function salvarMeta(input){
   }
 }
 
-async function gravarMeta(id, ano, mes, valorReais){
+/* A referência é o valor de onde a meta saiu. Só é gravada quando o app
+   derivou a meta de fato — se a pessoa digitou à mão, não temos como saber
+   em cima de quê, e inventar uma referência faria a conta não fechar para
+   quem conferisse depois. */
+async function gravarMeta(id, ano, mes, valorReais, referencia = null){
   if (!SB) throw new Error('Sem ligação com o banco.');
   if (valorReais === null){
     const { error } = await SB.from('metas').delete()
@@ -1297,19 +1368,18 @@ async function gravarMeta(id, ano, mes, valorReais){
     if (D.metas[ano] && D.metas[ano][mes]) delete D.metas[ano][mes][id];
     return;
   }
-  const sug = sugestaoMeta(id, ano, mes, metaPct);
   const linha = {
     unidade_id: id, ano, mes,
     valor_centavos: Math.round(valorReais * 100),
-    referencia_centavos: sug ? Math.round(sug.referencia * 100) : null,
-    percentual: metaPct,
+    referencia_centavos: referencia == null ? null : Math.round(referencia * 100),
+    percentual: referencia == null ? null : metaPct,
   };
   const { error } = await SB.from('metas').upsert(linha, { onConflict: 'unidade_id,ano,mes' });
   if (error) throw error;
   ((D.metas[ano] ||= {})[mes] ||= {})[id] = {
     valor: valorReais,
-    referencia: sug ? sug.referencia : null,
-    percentual: metaPct,
+    referencia: referencia,
+    percentual: referencia == null ? null : metaPct,
   };
 }
 
@@ -1318,20 +1388,49 @@ function usarSugestao(id){
   if (!sug) return;
   const campo = document.querySelector(`input[data-meta="${id}"]`);
   campo.value = moeda(sug.valor);
-  salvarMeta(campo);
+  salvarMeta(campo, sug.referencia);
+}
+function usarAlternativa(id){
+  const sug = sugestaoMeta(id, metaAno, metaMesSel, metaPct);
+  if (!sug || !sug.alternativa) return;
+  const campo = document.querySelector(`input[data-meta="${id}"]`);
+  campo.value = moeda(sug.alternativa.valor);
+  salvarMeta(campo, sug.alternativa.referencia);   // referência do ano limpo
 }
 
+/* No lote, mês fora da curva não vira meta às cegas: se existir um ano limpo,
+   ele é usado no lugar; se não existir, a unidade fica de fora e é avisada. */
 async function gerarMetasDoMes(){
-  const vazias = UNI.filter(u => (u.ativa || u.anos.includes(metaAno)) && !metasDo(metaAno, metaMesSel)[u.id])
-                    .map(u => ({ u, sug: sugestaoMeta(u.id, metaAno, metaMesSel, metaPct) }))
-                    .filter(x => x.sug);
-  if (!vazias.length){ alert('Não há meta em branco com sugestão disponível neste mês.'); return; }
-  if (!confirm(`Preencher ${vazias.length} meta(s) em branco de ${MESES[metaMesSel-1]} de ${metaAno}?\n\n`
-    + `Total: ${brl(vazias.reduce((s,x)=>s+x.sug.valor,0))}\n\nAs metas já preenchidas não são tocadas.`)) return;
+  const alvo = UNI.filter(u => (u.ativa || u.anos.includes(metaAno)) && !metasDo(metaAno, metaMesSel)[u.id])
+                  .map(u => ({ u, sug: sugestaoMeta(u.id, metaAno, metaMesSel, metaPct) }))
+                  .filter(x => x.sug);
 
-  let ok = 0, falhas = [];
-  for (const { u, sug } of vazias){
-    try { await gravarMeta(u.id, metaAno, metaMesSel, sug.valor); ok++; }
+  const usar    = alvo.filter(x => !x.sug.atipico);
+  const trocado = alvo.filter(x =>  x.sug.atipico &&  x.sug.alternativa);
+  const pulado  = alvo.filter(x =>  x.sug.atipico && !x.sug.alternativa);
+
+  const total = usar.reduce((s,x)=>s+x.sug.valor,0) + trocado.reduce((s,x)=>s+x.sug.alternativa.valor,0);
+  if (!usar.length && !trocado.length){
+    alert(pulado.length
+      ? `As ${pulado.length} unidade(s) em branco têm como base um mês fora da curva e não há ano limpo para usar.\n\n`
+        + `Preencha à mão: ${pulado.map(x=>x.u.curto).join(', ')}`
+      : 'Não há meta em branco com sugestão disponível neste mês.');
+    return;
+  }
+
+  let aviso = `Preencher ${usar.length + trocado.length} meta(s) de ${MESES[metaMesSel-1]} de ${metaAno}?\n\n`
+            + `Total: ${brl(total)}\n\nAs metas já preenchidas não são tocadas.`;
+  if (trocado.length) aviso += `\n\n${trocado.length} unidade(s) tinham como base um mês fora da curva `
+            + `(figurinhas da Copa, por exemplo) e vão usar um ano limpo:\n`
+            + trocado.map(x=>`  • ${x.u.curto}: ${x.sug.alternativa.origem}`).join('\n');
+  if (pulado.length) aviso += `\n\n${pulado.length} ficam de fora por não ter ano limpo: `
+            + pulado.map(x=>x.u.curto).join(', ');
+  if (!confirm(aviso)) return;
+
+  let ok = 0; const falhas = [];
+  for (const { u, sug } of [...usar, ...trocado]){
+    const base = (sug.atipico && sug.alternativa) ? sug.alternativa : sug;
+    try { await gravarMeta(u.id, metaAno, metaMesSel, base.valor, base.referencia); ok++; }
     catch(e){ falhas.push(u.curto); }
   }
   render();
