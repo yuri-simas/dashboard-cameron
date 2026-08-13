@@ -1675,27 +1675,11 @@ function abrir(nome){
 }
 document.querySelectorAll('.aba').forEach(a => a.addEventListener('click', () => abrir(a.dataset.secao)));
 
-/* O tema vive no atributo data-theme da raiz, que é o mesmo que o visualizador
-   usa — assim o botão daqui e o botão de fora falam a mesma língua. Sem o
-   atributo, vale a preferência do sistema. */
-const btnTema = document.getElementById('btnTema');
-const escuroNoSistema = window.matchMedia('(prefers-color-scheme: dark)');
-const temaAtual = () => document.documentElement.dataset.theme
-  || (escuroNoSistema.matches ? 'dark' : 'light');
-function marcarBotao(){ btnTema.textContent = temaAtual() === 'dark' ? '☀️' : '🌙'; }
-function aplicarTema(t){
-  document.documentElement.dataset.theme = t;
-  marcarBotao();
-  try { localStorage.setItem('cameron-tema', t); } catch(e){}
-}
-btnTema.addEventListener('click', () => aplicarTema(temaAtual() === 'dark' ? 'light' : 'dark'));
-escuroNoSistema.addEventListener('change', marcarBotao);
-// o visualizador pode trocar o data-theme por fora; o ícone acompanha
-new MutationObserver(marcarBotao).observe(document.documentElement, { attributeFilter: ['data-theme'] });
-
-let temaSalvo = null;
-try { temaSalvo = localStorage.getItem('cameron-tema'); } catch(e){}
-if (temaSalvo === 'dark' || temaSalvo === 'light') aplicarTema(temaSalvo); else marcarBotao();
+/* O tema NÃO é tratado aqui de propósito: quem cuida dele é o carregador,
+   no index.html, porque o botão precisa funcionar já na tela de login —
+   antes de este arquivo existir. Ter os dois ligados no mesmo botão fazia
+   o clique trocar o tema duas vezes e voltar ao ponto de partida.
+   window.aplicarTema('dark'|'light') continua disponível. */
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || !e.target.matches('#sec-lancar input[data-uni]')) return;
