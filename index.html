@@ -246,10 +246,11 @@ svg.grafico{display:block; width:100%; height:auto; min-width:520px}
 .lanc__moeda:focus-within{border-color:var(--brand-blue-2);
   box-shadow:0 0 0 2px color-mix(in srgb, var(--brand-blue-2) 25%, transparent)}
 .lanc__moeda>span{font-size:12px; font-weight:600; color:var(--text-faint); user-select:none}
-.lanc__item input{width:104px; text-align:right; font-weight:600; font-variant-numeric:tabular-nums;
+/* vale para o campo do lançamento e para o da meta, que usam a mesma casca */
+.lanc__moeda input{width:104px; text-align:right; font-weight:600; font-variant-numeric:tabular-nums;
   border:0; background:none; padding:9px 0; min-height:0; border-radius:0}
-.lanc__item input:hover{border:0}
-.lanc__item input:focus-visible{outline:none}
+.lanc__moeda input:hover{border:0}
+.lanc__moeda input:focus-visible{outline:none}
 .rodape-fixo{position:sticky; bottom:0; z-index:20; margin-top:16px; background:var(--surface);
   border:1px solid var(--line-strong); border-radius:var(--radius); box-shadow:var(--shadow-alta);
   padding:14px 18px; display:flex; flex-wrap:wrap; gap:20px; align-items:center}
@@ -342,6 +343,7 @@ code{background:var(--surface-2); padding:1.5px 6px; border-radius:5px; font-siz
     <button class="aba" role="tab" data-secao="mensal" aria-selected="false">Visão mensal</button>
     <button class="aba" role="tab" data-secao="anual" aria-selected="false">Visão anual</button>
     <button class="aba" role="tab" data-secao="comparar" aria-selected="false">Comparações</button>
+    <button class="aba" role="tab" data-secao="metas" aria-selected="false">Metas</button>
     <button class="aba" role="tab" data-secao="cadastros" aria-selected="false">Cadastros</button>
     <button class="aba" role="tab" data-secao="acessos" aria-selected="false" hidden>Acessos</button>
   </div>
@@ -353,6 +355,7 @@ code{background:var(--surface-2); padding:1.5px 6px; border-radius:5px; font-siz
   <section class="secao" id="sec-mensal"></section>
   <section class="secao" id="sec-anual"></section>
   <section class="secao" id="sec-comparar"></section>
+  <section class="secao" id="sec-metas"></section>
   <section class="secao" id="sec-cadastros"></section>
   <section class="secao" id="sec-acessos"></section>
 </main>
@@ -470,11 +473,14 @@ async function carregarDados(){
   const anos = [...new Set(Object.keys(lancamentos).map(d => +d.slice(0,4)))].sort();
   const anoAtual = anos.length ? anos[anos.length-1] : new Date().getFullYear();
 
-  // o app usa a meta do ano corrente, indexada por mês
+  // metas de todos os anos: ano -> mês -> unidade -> { valor, referência, percentual }
   const metas = {};
   for (const m of metasRaw){
-    if (m.ano !== anoAtual) continue;
-    (metas[m.mes] ||= {})[m.unidade_id] = Math.round(m.valor_centavos / 100);
+    ((metas[m.ano] ||= {})[m.mes] ||= {})[m.unidade_id] = {
+      valor: m.valor_centavos / 100,
+      referencia: m.referencia_centavos == null ? null : m.referencia_centavos / 100,
+      percentual: m.percentual == null ? null : Number(m.percentual),
+    };
   }
 
   // período de atividade de cada unidade, calculado do próprio movimento

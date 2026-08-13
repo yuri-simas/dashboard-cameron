@@ -101,10 +101,16 @@ function unidadesDoMes(ano, mes){
 const ehLoja  = u => u && u.bloco === 'lojas';
 const ehFeira = u => u && u.bloco === 'feiras';
 
-function metaMes(mes, filtro){
-  const m = D.metas[mes] || {};
+/* ---------- metas ----------
+   D.metas: ano -> mês -> unidade -> { valor, referencia, percentual } */
+const metasDo = (ano, mes) => (D.metas[ano] || {})[mes] || {};
+const metaDa = (ano, mes, id) => metasDo(ano, mes)[id] || null;
+
+function metaMes(ano, mes, filtro){
+  const m = metasDo(ano, mes);
   let t = 0;
-  for (const [id, v] of Object.entries(m)){
+  for (const [id, meta] of Object.entries(m)){
+    const v = meta.valor;
     const u = porId.get(id);
     if (!u || (filtro && !filtro(u))) continue;
     t += v;
@@ -115,7 +121,7 @@ function metaMes(mes, filtro){
 // "% da meta" vira um número sem sentido — então o app não mostra.
 function coberturaMeta(ano, mes){
   const comMovimento = unidadesDoMes(ano, mes);
-  const m = (ano === 2026 && D.metas[mes]) || {};
+  const m = metasDo(ano, mes);
   const com = comMovimento.filter(u => m[u.id]).length;
   return { total: comMovimento.length, com,
            completa: comMovimento.length > 0 && com === comMovimento.length,
@@ -129,7 +135,7 @@ function resumoMes(ano, mes, filtro){
   const media = diasLancados ? realizado/diasLancados : 0;
   const totalDias = diasNoMes(ano,mes);
   const projecao = media * totalDias;
-  const meta = ano === 2026 ? metaMes(mes,filtro) : 0;
+  const meta = metaMes(ano, mes, filtro);
   const cob = coberturaMeta(ano,mes);
   return { realizado, diasLancados, media, totalDias, projecao, meta, cob,
            pctMeta: (meta && cob.completa) ? realizado*100/meta : null,
@@ -1120,6 +1126,219 @@ function telaComparar(){
 }
 
 /* ================================================================
+   7b. METAS
+   ================================================================ */
+let metaAno = ANO_ATUAL, metaMesSel = MES_ATUAL, metaPct = 85;
+
+/* A sugestão sai do histórico, não de um chute. Em ordem de preferência:
+     1. o mesmo mês do ano anterior
+     2. se aquele mês não existir (unidade nova, feira que não rodou),
+        o mesmo mês de dois anos atrás
+     3. sem nada disso, a média dos meses já lançados da própria unidade
+   O percentual da regra da rede entra por cima do que for encontrado.   */
+function sugestaoMeta(id, ano, mes, pct){
+  const noAno = a => {
+    const dias = datasDoMes(a, mes).filter(d => valor(d, id) !== null);
+    if (!dias.length) return null;
+    return { total: dias.reduce((s,d)=>s+valor(d,id), 0), dias: dias.length, ano: a };
+  };
+  const base = noAno(ano-1) || noAno(ano-2);
+  if (base){
+    // mês incompleto no passado não pode virar meta cheia: completa pela média
+    const diasDoMes = diasNoMes(base.ano, mes);
+    const cheio = base.dias >= diasDoMes ? base.total : (base.total / base.dias) * diasDoMes;
+    return { valor: cheio * pct / 100, referencia: cheio, origem: `${MESES[mes-1]} de ${base.ano}`,
+             parcial: base.dias < diasDoMes, dias: base.dias, diasDoMes };
+  }
+  // nenhum ano anterior: usa o ritmo da própria unidade neste ano
+  const meses = mesesDoAno(ano).filter(m => m !== mes && totalUnidadeMes(id, ano, m) > 0);
+  if (!meses.length) return null;
+  const media = meses.reduce((s,m)=>s+totalUnidadeMes(id,ano,m),0) / meses.length;
+  return { valor: media * pct / 100, referencia: media,
+           origem: `média dos outros meses de ${ano}`, parcial: false };
+}
+
+function telaMetas(){
+  const ano = metaAno, mes = metaMesSel;
+  const unis = UNI.filter(u => u.ativa || u.anos.includes(ano));
+  const existentes = metasDo(ano, mes);
+
+  const linhas = unis.map(u => {
+    const meta = existentes[u.id];
+    const sug = sugestaoMeta(u.id, ano, mes, metaPct);
+    const realAnterior = totalUnidadeMes(u.id, ano-1, mes);
+    const realAtual = totalUnidadeMes(u.id, ano, mes);
+    return { u, meta, sug, realAnterior, realAtual };
+  });
+
+  const totalMeta = linhas.reduce((s,l)=>s+(l.meta?l.meta.valor:0), 0);
+  const totalSug  = linhas.reduce((s,l)=>s+(l.sug?l.sug.valor:0), 0);
+  const semMeta   = linhas.filter(l=>!l.meta).length;
+
+  const linha = l => {
+    const {u, meta, sug, realAnterior, realAtual} = l;
+    return `<tr>
+      <td class="fix">${esc(u.nome)}
+        <span class="tag ${u.bloco==='lojas'?'tag--loja':'tag--feira'}">${u.bloco==='lojas'?'loja':'feira'}</span></td>
+      <td>${realAnterior?num(realAnterior):'<span class="vazio">—</span>'}</td>
+      <td>${sug?`<span title="${esc(sug.origem)}${sug.parcial?` · ${sug.dias} de ${sug.diasDoMes} dias, completado pela média`:''}">${num(sug.valor)}</span>`
+             :'<span class="vazio">sem base</span>'}</td>
+      <td>
+        <span class="lanc__moeda" style="display:inline-flex"><span aria-hidden="true">R$</span>
+          <input type="text" inputmode="decimal" placeholder="—" style="width:96px"
+                 value="${meta?moeda(meta.valor):''}" data-meta="${u.id}"
+                 aria-label="Meta de ${esc(u.nome)}"
+                 onfocus="this.select()" onchange="salvarMeta(this)"></span>
+        ${sug?`<button type="button" class="btn btn--pequeno" style="margin-left:6px"
+                 onclick="usarSugestao('${u.id}')" title="Usar ${brl(sug.valor)}">usar</button>`:''}
+      </td>
+      <td>${realAtual?num(realAtual):'<span class="vazio">—</span>'}</td>
+      <td>${meta&&realAtual?mostraVar(varPct(realAtual, meta.valor)):'<span class="vazio">—</span>'}</td>
+      <td class="lanc__recado" data-recado="${u.id}"></td>
+    </tr>`;
+  };
+
+  return `
+  <h2 class="titulo">Metas</h2>
+  <p class="sub">Uma meta por unidade e por mês. A sugestão vem do histórico de verdade —
+  o mesmo mês do ano anterior — e não de um número inventado.</p>
+
+  <div class="controles">
+    <div class="campo"><span>Ano</span>
+      <select onchange="metaAno=+this.value;render()">
+        ${[...new Set([...ANOS, ANO_ATUAL+1])].sort().map(a=>`<option value="${a}" ${a===ano?'selected':''}>${a}</option>`).join('')}
+      </select></div>
+    <div class="campo"><span>Mês</span>
+      <select onchange="metaMesSel=+this.value;render()">
+        ${MESES.map((m,i)=>`<option value="${i+1}" ${i+1===mes?'selected':''}>${m[0].toUpperCase()+m.slice(1)}</option>`).join('')}
+      </select></div>
+    <div class="campo"><span>% sobre o ano anterior</span>
+      <span class="lanc__moeda"><input type="text" inputmode="decimal" style="width:56px" value="${metaPct}"
+             onchange="metaPct=lerMoeda(this.value)||85;render()" aria-label="Percentual da meta"><span>%</span></span></div>
+    <div class="campo"><span>&nbsp;</span>
+      <button class="btn btn--primario" onclick="gerarMetasDoMes()">Preencher as vazias com a sugestão</button></div>
+  </div>
+
+  <div class="kpis bloco">
+    <div class="kpi kpi--destaque">
+      <div class="kpi__rot">Meta de ${MESES[mes-1]} de ${ano}</div>
+      <div class="kpi__val">${brl(totalMeta)}</div>
+      <div class="kpi__pe">${semMeta ? `${semMeta} de ${linhas.length} unidades ainda sem meta` : 'todas as unidades com meta'}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi__rot">Se usar todas as sugestões</div>
+      <div class="kpi__val">${brl(totalSug)}</div>
+      <div class="kpi__pe">${metaPct}% do que a rede fez em ${MESES[mes-1]} de ${ano-1}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi__rot">Realizado em ${MESES[mes-1]} de ${ano-1}</div>
+      <div class="kpi__val">${brl(totalMes(ano-1, mes))}</div>
+      <div class="kpi__pe">${datasDoMes(ano-1,mes).length} dias lançados</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi__rot">Realizado em ${MESES[mes-1]} de ${ano}</div>
+      <div class="kpi__val">${brl(totalMes(ano, mes))}</div>
+      <div class="kpi__pe">${totalMeta ? mostraVar(varPct(totalMes(ano,mes), totalMeta)) + ' contra a meta' : 'sem meta para comparar'}</div>
+    </div>
+  </div>
+
+  <div class="bloco">
+    <div class="rolagem">
+      <table>
+        <thead><tr>
+          <th class="fix">Unidade</th>
+          <th>Fez em ${MES_CURTO[mes-1]}/${String(ano-1).slice(2)}</th>
+          <th>Sugestão (${metaPct}%)</th>
+          <th style="text-align:left">Meta</th>
+          <th>Fez em ${MES_CURTO[mes-1]}/${String(ano).slice(2)}</th>
+          <th>× meta</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${linhas.map(linha).join('')}</tbody>
+        <tfoot><tr class="lin-total">
+          <td class="fix">Total</td>
+          <td>${num(totalMes(ano-1, mes))}</td>
+          <td>${num(totalSug)}</td>
+          <td style="text-align:left">${brl(totalMeta)}</td>
+          <td>${num(totalMes(ano, mes))}</td>
+          <td>${totalMeta?mostraVar(varPct(totalMes(ano,mes), totalMeta)):'—'}</td>
+          <td></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <p class="nota">A sugestão usa o mesmo mês do ano anterior; se a unidade não existia, usa dois anos atrás;
+    se não houver nada, usa a média dos outros meses dela. Quando o mês do passado está incompleto,
+    a conta completa pela média diária em vez de tratar o mês como menor do que foi —
+    passe o mouse sobre a sugestão para ver de onde ela saiu.</p>
+  </div>`;
+}
+
+async function salvarMeta(input){
+  const id = input.dataset.meta;
+  const cel = input.closest('tr').querySelector('[data-recado]');
+  const v = lerMoeda(input.value);
+  input.value = v === null ? '' : moeda(v);
+  cel.textContent = 'salvando…';
+  try {
+    await gravarMeta(id, metaAno, metaMesSel, v);
+    cel.textContent = v === null ? 'apagada' : 'salva';
+    setTimeout(()=>{ if (cel.isConnected) cel.textContent=''; }, 1500);
+  } catch(e){
+    cel.textContent = explicarErroLancamento(e);
+  }
+}
+
+async function gravarMeta(id, ano, mes, valorReais){
+  if (!SB) throw new Error('Sem ligação com o banco.');
+  if (valorReais === null){
+    const { error } = await SB.from('metas').delete()
+      .eq('unidade_id', id).eq('ano', ano).eq('mes', mes);
+    if (error) throw error;
+    if (D.metas[ano] && D.metas[ano][mes]) delete D.metas[ano][mes][id];
+    return;
+  }
+  const sug = sugestaoMeta(id, ano, mes, metaPct);
+  const linha = {
+    unidade_id: id, ano, mes,
+    valor_centavos: Math.round(valorReais * 100),
+    referencia_centavos: sug ? Math.round(sug.referencia * 100) : null,
+    percentual: metaPct,
+  };
+  const { error } = await SB.from('metas').upsert(linha, { onConflict: 'unidade_id,ano,mes' });
+  if (error) throw error;
+  ((D.metas[ano] ||= {})[mes] ||= {})[id] = {
+    valor: valorReais,
+    referencia: sug ? sug.referencia : null,
+    percentual: metaPct,
+  };
+}
+
+function usarSugestao(id){
+  const sug = sugestaoMeta(id, metaAno, metaMesSel, metaPct);
+  if (!sug) return;
+  const campo = document.querySelector(`input[data-meta="${id}"]`);
+  campo.value = moeda(sug.valor);
+  salvarMeta(campo);
+}
+
+async function gerarMetasDoMes(){
+  const vazias = UNI.filter(u => (u.ativa || u.anos.includes(metaAno)) && !metasDo(metaAno, metaMesSel)[u.id])
+                    .map(u => ({ u, sug: sugestaoMeta(u.id, metaAno, metaMesSel, metaPct) }))
+                    .filter(x => x.sug);
+  if (!vazias.length){ alert('Não há meta em branco com sugestão disponível neste mês.'); return; }
+  if (!confirm(`Preencher ${vazias.length} meta(s) em branco de ${MESES[metaMesSel-1]} de ${metaAno}?\n\n`
+    + `Total: ${brl(vazias.reduce((s,x)=>s+x.sug.valor,0))}\n\nAs metas já preenchidas não são tocadas.`)) return;
+
+  let ok = 0, falhas = [];
+  for (const { u, sug } of vazias){
+    try { await gravarMeta(u.id, metaAno, metaMesSel, sug.valor); ok++; }
+    catch(e){ falhas.push(u.curto); }
+  }
+  render();
+  if (falhas.length) alert(`${ok} meta(s) gravada(s). Falharam: ${falhas.join(', ')}`);
+}
+
+/* ================================================================
    8. CADASTROS
    ================================================================ */
 function telaCadastros(){
@@ -1175,17 +1394,22 @@ function telaCadastros(){
   </div>` : ''}
 
   <div class="bloco">
-    <p class="card__tit" style="margin-bottom:8px">Metas por mês (2026)</p>
+    <p class="card__tit" style="margin-bottom:8px">Metas do ano de ${ANO_ATUAL}</p>
     <div class="rolagem">
       <table>
-        <thead><tr><th class="fix">Unidade</th>${mesesDoAno(2026).map(m=>`<th>${MES_CURTO[m-1]}</th>`).join('')}</tr></thead>
-        <tbody>${UNI.filter(u=>u.ativa).map(u=>`<tr><td class="fix">${esc(u.curto)}</td>
-          ${mesesDoAno(2026).map(m=>{const v=(D.metas[m]||{})[u.id]; return v?`<td>${num(v)}</td>`:'<td class="vazio">—</td>';}).join('')}</tr>`).join('')}</tbody>
+        <thead><tr><th class="fix">Unidade</th>${MESES.map((_,i)=>`<th>${MES_CURTO[i]}</th>`).join('')}<th>Ano</th></tr></thead>
+        <tbody>${UNI.filter(u=>u.ativa).map(u=>{
+          const vals = MESES.map((_,i)=>{const m=metaDa(ANO_ATUAL,i+1,u.id); return m?m.valor:0;});
+          return `<tr><td class="fix">${esc(u.curto)}</td>
+            ${vals.map(v=>v?`<td>${num(v)}</td>`:'<td class="vazio">—</td>').join('')}
+            <td style="font-weight:600">${num(vals.reduce((a,b)=>a+b,0))}</td></tr>`;}).join('')}</tbody>
         <tfoot><tr class="lin-total"><td class="fix">Total</td>
-          ${mesesDoAno(2026).map(m=>`<td>${num(metaMes(m))}</td>`).join('')}</tr></tfoot>
+          ${MESES.map((_,i)=>`<td>${num(metaMes(ANO_ATUAL,i+1))}</td>`).join('')}
+          <td>${num(MESES.reduce((s,_,i)=>s+metaMes(ANO_ATUAL,i+1),0))}</td></tr></tfoot>
       </table>
     </div>
-    <p class="nota">Regra padrão: <b>faturamento do mesmo mês do ano anterior × 85%</b>. Agora que 2024 e 2025 estão no app,
+    <p class="nota">Para <b>editar</b>, use a aba <b>Metas</b>, que mostra a sugestão a partir do ano anterior ao lado de cada campo.
+    Regra padrão: <b>faturamento do mesmo mês do ano anterior × 85%</b>. Agora que 2024 e 2025 estão no app,
     o botão "gerar metas do ano" consegue calcular isso sozinho para todas as unidades — inclusive junho e julho,
     que na planilha ficaram sem meta. A meta da quinzena é metade da meta do mês.</p>
   </div>
@@ -1430,7 +1654,7 @@ function sortearSenha(){
    9. NAVEGAÇÃO
    ================================================================ */
 const TELAS = { painel:telaPainel, lancar:telaLancar, mensal:telaMensal, anual:telaAnual,
-                comparar:telaComparar, cadastros:telaCadastros, acessos:telaAcessos };
+                comparar:telaComparar, metas:telaMetas, cadastros:telaCadastros, acessos:telaAcessos };
 let secaoAtual = 'painel';
 
 function render(){
