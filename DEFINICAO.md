@@ -475,10 +475,11 @@ Pensado para dar a resposta em 5 segundos, no celular:
 
 **❓ Ainda pendente**
 
-- [ ] ❓ **O que aconteceu em maio e junho de 2026?** Maio fechou **+250% contra
-      maio/2025** e junho **+60%**, com julho voltando ao normal. Com os três anos
-      no app dá para ver que é uma anomalia de verdade — mas só o cliente sabe se
-      foi campanha, evento, ou erro de lançamento.
+- [x] ✅ **Maio e junho de 2026 = álbum de figurinhas da Copa.** Maio fechou
+      **+250% contra maio/2025** e junho **+60%**, com julho voltando ao normal.
+      É um padrão de **ano de Copa**: a planilha de 2022 tinha abas próprias
+      (`Figurinhas_Agosto` até `Figurinhas_Dezembro`) para o mesmo fenômeno.
+      Ver a seção 16 — isso muda como as metas de 2027 devem ser feitas.
 - [ ] ❓ **Que feira é a coluna sem nome de abr/2026** (R$ 42.285).
 - [ ] ❓ **Lista das datas especiais da Cameron** — quais eventos entram no
       calendário além dos feriados (Feira do Livro de POA, volta às aulas,
@@ -486,6 +487,51 @@ Pensado para dar a resposta em 5 segundos, no celular:
 - [ ] ❓ **Dias em que as lojas fecharam** — se o cliente tiver essa informação, o
       histórico fica mais preciso. Se não tiver, o app trata como "não lançado" e
       segue funcionando.
+
+## 15b. Ano de Copa: o efeito das figurinhas
+
+✅ **Confirmado pelo cliente:** o salto de maio e junho de 2026 é **venda de
+álbum e figurinhas da Copa do Mundo**. Não é erro de lançamento nem campanha
+pontual — é um ciclo que se repete **a cada quatro anos**.
+
+A planilha de 2022 confirma: ela tinha abas separadas — `Figurinhas_Agosto` até
+`Figurinhas_Dezembro` — só para essa linha de venda.
+
+**O tamanho do efeito em 2026:**
+
+| Mês | 2025 | 2026 | |
+|---|---:|---:|---|
+| Maio | 1,44 mi | **5,03 mi** | +250% |
+| Junho | 1,59 mi | **2,54 mi** | +60% |
+| Julho | 2,01 mi | 1,61 mi | −5,6% (normal) |
+
+São da ordem de **R$ 4,5 milhões** concentrados em dois meses — e janeiro a
+março de 2026 estavam **20% a 24% abaixo** de 2025, o que reforça que o salto é
+das figurinhas e não de um crescimento da rede.
+
+### ⚠️ A armadilha nas metas de 2027
+
+A regra da rede é *mês do ano anterior × 85%*. Aplicada sem pensar, a meta de
+**maio/2027 sairia de R$ 5,03 milhões**, ou seja, cerca de **R$ 4,3 milhões** —
+contra um maio normal de mais ou menos R$ 1,2 milhão. Seria uma meta
+**impossível**, e nasceria de um clique no botão "preencher as vazias".
+
+O mesmo vale ao contrário: a meta de maio/2030 (próxima Copa) feita em cima de
+2029 nasceria **baixa demais**.
+
+**O que fazer quando chegar a hora** — a decidir com o cliente:
+
+1. Nos meses de Copa, usar como base **o mesmo mês do último ano sem Copa**
+   (maio/2025 para maio/2027), e não o ano imediatamente anterior.
+2. Ou **separar a figurinha** como unidade própria, do jeito que 2022 já fazia
+   com as abas `Figurinhas_*`. Aí a loja continua comparável consigo mesma e a
+   figurinha vira uma linha à parte, que aparece só em ano de Copa.
+
+A opção 2 é a mais limpa e é o que a própria rede já fazia. Ela também responde
+uma pergunta que hoje não tem resposta: **quanto a Copa realmente rendeu**.
+
+❓ Como os lançamentos de figurinha entraram em 2026 — somados ao valor da loja,
+ou em algum lugar separado? Disso depende se dá para separar o histórico.
 
 ## 16. Próximos passos
 

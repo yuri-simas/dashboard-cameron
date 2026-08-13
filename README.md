@@ -145,22 +145,25 @@ Ainda sem identificação: a **feira sem nome de abr/2026** (R$ 42.285).
 | **Comparações** | Dia da semana, mês a mês, unidade a unidade e datas especiais — tudo contra o ano anterior |
 | **Cadastros** | Unidades, de/para dos nomes, metas, calendário e a conferência da importação |
 
-## O ponto mais importante para conferir com o cliente
+## Maio de 2026: as figurinhas da Copa
 
-**Maio de 2026 fechou em R$ 5,03 milhões.** Com os três anos no app, dá para ver
-o tamanho da anomalia:
+**Maio fechou em R$ 5,03 milhões** — +250% contra maio/2025. Junho seguiu alto
+(+60%) e julho voltou ao normal (−5,6%).
+
+✅ **Explicado pelo cliente:** é a venda de **álbum e figurinhas da Copa do
+Mundo**, um ciclo que se repete a cada quatro anos. A planilha de 2022 confirma:
+tinha abas próprias, `Figurinhas_Agosto` até `Figurinhas_Dezembro`, só para isso.
 
 | Maio | Total |
 |---|---:|
 | 2024 | 1,20 mi |
 | 2025 | 1,44 mi |
-| **2026** | **5,03 mi** — **+250%** contra 2025 |
+| **2026** | **5,03 mi** |
 
-Junho seguiu alto (+60%) e julho voltou ao normal (−5,6%). O salto começa em 30
-de abril, pega **todas as unidades ao mesmo tempo** e tem ritmo semanal normal
-(fim de semana mais forte), então não parece acumulado lançado errado. Mas
-janeiro, fevereiro e março de 2026 estavam **20% a 24% abaixo** de 2025, o que
-torna o salto ainda mais estranho. Vale perguntar o que aconteceu.
+⚠️ **Isso tem consequência direta nas metas.** Pela regra da rede (mês anterior ×
+85%), a meta de maio/2027 sairia de R$ 5,03 milhões — cerca de **R$ 4,3 milhões
+contra um maio normal de ~R$ 1,2 milhão**. Meta impossível, nascida de um clique.
+A seção 15b do [DEFINICAO.md](DEFINICAO.md) traz as duas saídas.
 
 ## Arquivos
 
