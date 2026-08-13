@@ -519,19 +519,24 @@ contra um maio normal de mais ou menos R$ 1,2 milhão. Seria uma meta
 O mesmo vale ao contrário: a meta de maio/2030 (próxima Copa) feita em cima de
 2029 nasceria **baixa demais**.
 
-**O que fazer quando chegar a hora** — a decidir com o cliente:
+✅ **Em 2026 a figurinha foi lançada junto com a venda da loja**, sem registro
+separado. Isso tem duas consequências:
 
-1. Nos meses de Copa, usar como base **o mesmo mês do último ano sem Copa**
-   (maio/2025 para maio/2027), e não o ano imediatamente anterior.
-2. Ou **separar a figurinha** como unidade própria, do jeito que 2022 já fazia
-   com as abas `Figurinhas_*`. Aí a loja continua comparável consigo mesma e a
-   figurinha vira uma linha à parte, que aparece só em ano de Copa.
+- **Não dá para reconstruir** quanto a Copa rendeu em 2026. O número existe, mas
+  está diluído dentro de cada loja e não há como separar depois.
+- **Sobra um caminho só para as metas de 2027**: nos meses afetados, usar como
+  base o **mesmo mês do último ano sem Copa** (maio/2025 para maio/2027), em vez
+  do ano imediatamente anterior.
 
-A opção 2 é a mais limpa e é o que a própria rede já fazia. Ela também responde
-uma pergunta que hoje não tem resposta: **quanto a Copa realmente rendeu**.
+**Para a próxima Copa (2030)**, vale decidir antes: se a figurinha virar uma
+unidade própria no cadastro — como a rede já fazia em 2022 com as abas
+`Figurinhas_*` — a loja continua comparável consigo mesma, a figurinha vira uma
+linha que aparece só de quatro em quatro anos, e a pergunta "quanto a Copa
+rendeu" passa a ter resposta. É uma decisão de **como lançar**, não de software:
+o app já aguenta, basta cadastrar a unidade.
 
-❓ Como os lançamentos de figurinha entraram em 2026 — somados ao valor da loja,
-ou em algum lugar separado? Disso depende se dá para separar o histórico.
+⚠️ **Enquanto isso não é tratado, o botão "preencher as vazias" da aba Metas não
+deve ser usado para maio e junho de 2027** sem conferir a base.
 
 ## 16. Próximos passos
 
