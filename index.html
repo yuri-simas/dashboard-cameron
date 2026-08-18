@@ -299,6 +299,109 @@ code{background:var(--surface-2); padding:1.5px 6px; border-radius:5px; font-siz
   border-top-color:var(--brand-red); border-radius:50%; animation:girar .7s linear infinite}
 @keyframes girar{to{transform:rotate(360deg)}}
 
+/* ============================================================ IMPRESSÃO
+   O cliente imprime. Um dashboard impresso do jeito que aparece na tela
+   sai péssimo: fundo escuro comendo tinta, menu no meio do papel, tabela
+   cortada na virada da página e cabeçalho que não se repete.
+
+   As regras ficam numa classe, e não dentro de @media print, porque assim
+   servem para duas coisas ao mesmo tempo: a impressão de verdade (a classe
+   é ligada no beforeprint) e o botão "ver como vai imprimir", que mostra o
+   resultado sem abrir a caixa de diálogo. Uma fonte só, sem duas versões
+   para desencontrar.                                                      */
+@page{ size:A4 portrait; margin:14mm 12mm 16mm; }
+
+body.modo-impressao{
+  /* papel é branco: o tema escuro não vai para a impressora */
+  --bg:#ffffff; --surface:#ffffff; --surface-2:#f2f5fa;
+  --line:#c9d4e4; --line-strong:#8fa2bd;
+  --text:#101a2b; --text-dim:#3d4c63; --text-faint:#5b6a80;
+  --pos:#0a6b41; --neg:#a81a18; --warn:#8a5709;
+  --fds:#eef3fa;
+  --shadow:none; --shadow-alta:none;
+  background:#fff; font-size:11.5px;
+}
+body.modo-impressao .topo,
+body.modo-impressao .abas,
+body.modo-impressao .controles,
+body.modo-impressao .rodape-fixo,
+body.modo-impressao .btn,
+body.modo-impressao .chips,
+body.modo-impressao .rel__acoes,
+body.modo-impressao .aviso--info{ display:none !important; }
+
+body.modo-impressao .pagina{ max-width:none; padding:0; }
+body.modo-impressao .card,
+body.modo-impressao .kpi,
+body.modo-impressao .rolagem{ box-shadow:none !important; border-color:var(--line); }
+body.modo-impressao .rolagem{ overflow:visible !important; border-radius:0; }
+
+/* nada de gráfico ou cartão partido no meio da folha */
+body.modo-impressao .card,
+body.modo-impressao .kpi,
+body.modo-impressao .svg-caixa,
+body.modo-impressao tr,
+body.modo-impressao .rel__bloco{ break-inside:avoid; page-break-inside:avoid; }
+body.modo-impressao .rel__quebra{ break-before:page; page-break-before:always; }
+
+/* o cabeçalho da tabela se repete em toda folha */
+body.modo-impressao thead{ display:table-header-group; }
+body.modo-impressao tfoot{ display:table-footer-group; }
+body.modo-impressao thead th{ position:static; background:var(--surface-2) !important; }
+body.modo-impressao .fix{ position:static; }
+body.modo-impressao table{ font-size:10px; width:100%; }
+body.modo-impressao th, body.modo-impressao td{ padding:4px 6px; }
+body.modo-impressao svg.grafico{ min-width:0; width:100%; }
+
+/* as barras e as faixas precisam sair coloridas, não em cinza */
+body.modo-impressao *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+body.modo-impressao h2.titulo{ font-size:19px; }
+body.modo-impressao .kpis{ grid-template-columns:repeat(4,1fr); gap:8px; }
+body.modo-impressao .kpi__val{ font-size:17px; }
+body.modo-impressao .kpi{ padding:9px 11px; }
+body.modo-impressao .bloco{ margin-bottom:14px; }
+body.modo-impressao .card__cab{ padding:10px 12px 0; }
+body.modo-impressao .card__corpo{ padding:10px 12px; }
+
+/* só aparece no papel */
+.rel__cabecalho{ display:none; }
+body.modo-impressao .rel__cabecalho{
+  display:flex; align-items:flex-end; justify-content:space-between; gap:16px;
+  border-bottom:2px solid var(--brand-red); padding-bottom:8px; margin-bottom:16px;
+}
+body.modo-impressao .rel__cabecalho h1{
+  font-family:var(--fonte-titulo); font-size:20px; font-weight:600; margin:0; letter-spacing:-.3px;
+}
+body.modo-impressao .rel__cabecalho .rel__meta{ font-size:10px; color:var(--text-dim); text-align:right; line-height:1.5; }
+
+/* rede de segurança: se o beforeprint não disparar, ao menos o menu não vai
+   para o papel */
+@media print{
+  .topo, .abas, .controles, .rodape-fixo, .rel__acoes{ display:none !important; }
+  .pagina{ max-width:none; padding:0; }
+  .rolagem{ overflow:visible !important; }
+  thead{ display:table-header-group; }
+  tr, .card, .kpi{ break-inside:avoid; }
+}
+
+
+
+/* a tabela dia a dia e a mais larga do relatorio: no papel ela vai mais
+   apertada, para caber na folha em pe sem cortar coluna */
+body.modo-impressao .rel__quebra table{ font-size:8.5px; }
+body.modo-impressao .rel__quebra th, body.modo-impressao .rel__quebra td{ padding:2px 3px; }
+
+/* barra da previa de impressao: some no papel, so existe na tela */
+#barraPrevia{position:fixed; top:0; left:0; right:0; z-index:200; display:flex; gap:10px;
+  align-items:center; justify-content:center; padding:8px 14px;
+  background:var(--ink); color:#fff; font-size:12.5px; font-weight:600;
+  box-shadow:0 2px 12px rgba(0,0,0,.25)}
+#barraPrevia .btn{background:rgba(255,255,255,.12); border-color:rgba(255,255,255,.25); color:#fff}
+#barraPrevia .btn:hover{background:rgba(255,255,255,.24)}
+body.modo-impressao{padding-top:46px}
+@media print{ #barraPrevia{display:none !important} body.modo-impressao{padding-top:0} }
+
 @media (max-width:640px){
   .topo__linha{padding:10px 14px}
   .marca__sub,.hoje{display:none}
@@ -345,6 +448,7 @@ code{background:var(--surface-2); padding:1.5px 6px; border-radius:5px; font-siz
     <button class="aba" role="tab" data-secao="mensal" aria-selected="false">Visão mensal</button>
     <button class="aba" role="tab" data-secao="anual" aria-selected="false">Visão anual</button>
     <button class="aba" role="tab" data-secao="comparar" aria-selected="false">Comparações</button>
+    <button class="aba" role="tab" data-secao="relatorios" aria-selected="false">Relatórios</button>
     <button class="aba" role="tab" data-secao="metas" aria-selected="false">Metas</button>
     <button class="aba" role="tab" data-secao="cadastros" aria-selected="false">Cadastros</button>
     <button class="aba" role="tab" data-secao="acessos" aria-selected="false" hidden>Acessos</button>
@@ -357,6 +461,7 @@ code{background:var(--surface-2); padding:1.5px 6px; border-radius:5px; font-siz
   <section class="secao" id="sec-mensal"></section>
   <section class="secao" id="sec-anual"></section>
   <section class="secao" id="sec-comparar"></section>
+  <section class="secao" id="sec-relatorios"></section>
   <section class="secao" id="sec-metas"></section>
   <section class="secao" id="sec-cadastros"></section>
   <section class="secao" id="sec-acessos"></section>

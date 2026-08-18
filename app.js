@@ -1438,6 +1438,366 @@ async function gerarMetasDoMes(){
 }
 
 /* ================================================================
+   7c. RELATÓRIOS
+   Feitos para sair no papel. Cada um monta um documento fechado:
+   cabeçalho com período e data de emissão, gráficos, tabelas e o
+   resumo no fim. O botão de impressão usa a caixa do navegador, que
+   é onde o cliente escolhe impressora, papel e se quer PDF.
+   ================================================================ */
+let relTipo = 'mensal', relAno = ANO_ATUAL, relMes = MES_ATUAL, relUnidade = 'todas';
+
+const REL_TIPOS = {
+  mensal:   'Fechamento do mês',
+  anual:    'Comparativo entre anos',
+  unidades: 'Desempenho por unidade',
+  semana:   'Dia da semana',
+};
+
+function relCabecalho(titulo, periodo){
+  const agora = new Date();
+  const q = n => String(n).padStart(2,'0');
+  return '<div class="rel__cabecalho"><div>'
+    + '<h1>Livraria Cameron</h1>'
+    + '<div style="font-size:12px;font-weight:600">' + esc(titulo) + '</div></div>'
+    + '<div class="rel__meta">' + esc(periodo) + '<br>emitido em '
+    + q(agora.getDate()) + '/' + q(agora.getMonth()+1) + '/' + agora.getFullYear()
+    + ' às ' + q(agora.getHours()) + ':' + q(agora.getMinutes()) + '<br>'
+    + esc((D.eu && D.eu.nome) || '') + '</div></div>';
+}
+
+/* ---------- 1. fechamento do mês ---------- */
+function relMensal(){
+  const ano = relAno, mes = relMes, f = filtroDe(relUnidade);
+  const datas = datasDoMes(ano, mes);
+  if (!datas.length) return `<p class="nota">Nenhum lançamento em ${MESES[mes-1]} de ${ano}.</p>`;
+
+  const r = resumoMes(ano, mes, f);
+  const cmp = comparaMes(mes, ano, ano-1, f);
+  const unis = unidadesDoMes(ano, mes).filter(u => !f || f(u));
+
+  const pontos = datas.map(d => ({ rot:String(diaDe(d)), v:totalDoDia(d, f),
+    tit:`${DIAS_SEM[diaSemana(d)]} ${dataBrLonga(d)}: ${brl(totalDoDia(d,f))}` }));
+  const datasAA = datasDoMes(ano-1, mes);
+  const serie2 = datasAA.length ? datas.map(d => {
+    const alvo = datasAA.find(x => diaDe(x) === diaDe(d));
+    return { rot:String(diaDe(d)), v: alvo ? totalDoDia(alvo, f) : 0 };
+  }) : null;
+
+  const porUni = unis.map(u => {
+    const t = totalUnidadeMes(u.id, ano, mes);
+    const n = diasComVendaNoMes(u.id, ano, mes);
+    const c = comparaMes(mes, ano, ano-1, x => x && x.id === u.id);
+    const meta = metaDa(ano, mes, u.id);
+    return { u, t, n, c, meta };
+  }).sort((a,b) => b.t - a.t);
+
+  return relCabecalho(`Fechamento de ${MESES[mes-1]} de ${ano}`,
+      `${rotuloDe(relUnidade)} · ${r.diasLancados} de ${r.totalDias} dias`)
+  + `
+  <div class="kpis bloco">
+    <div class="kpi kpi--destaque"><div class="kpi__rot">Realizado</div>
+      <div class="kpi__val">${brl(r.realizado)}</div>
+      <div class="kpi__pe">${r.diasLancados} de ${r.totalDias} dias lançados</div></div>
+    <div class="kpi"><div class="kpi__rot">Contra ${ano-1}</div>
+      <div class="kpi__val">${cmp ? pct(cmp.variacao) : '—'}</div>
+      <div class="kpi__pe">${cmp ? brlCurto(cmp.b) + ' em ' + (ano-1) : 'sem base'}</div></div>
+    <div class="kpi"><div class="kpi__rot">Média por dia</div>
+      <div class="kpi__val">${brl(r.media)}</div>
+      <div class="kpi__pe">projeção do mês ${brlCurto(r.projecao)}</div></div>
+    <div class="kpi"><div class="kpi__rot">Meta</div>
+      <div class="kpi__val">${r.meta ? brlCurto(r.meta) : '—'}</div>
+      <div class="kpi__pe">${r.pctMeta !== null ? r.pctMeta.toFixed(0) + '% atingido' : 'meta incompleta'}</div></div>
+  </div>
+
+  <div class="card bloco rel__bloco">
+    <div class="card__cab"><p class="card__tit">Venda dia a dia</p>
+      <p class="card__sub">Linha cheia ${ano}${serie2?', pontilhada '+(ano-1):''}. Traço azul: média do mês.</p></div>
+    <div class="card__corpo">${graficoLinha({ pontos, serie2, rotuloX:(p,i)=> i%2===0?p.rot:'',
+      marcar:(p,i)=>{ const e=ESPECIAIS.get(datas[i]); return e?(e.curto||e.nome):null; } })}</div>
+  </div>
+
+  <div class="bloco rel__bloco">
+    <p class="card__tit" style="margin-bottom:8px">Por unidade</p>
+    <div class="rolagem"><table>
+      <thead><tr><th class="fix">Unidade</th><th>Total</th><th>Média/dia</th><th>Dias</th>
+        <th>${MES_CURTO[mes-1]}/${String(ano-1).slice(2)}</th><th>Variação</th><th>Meta</th><th>% da meta</th></tr></thead>
+      <tbody>${porUni.map(x => `<tr>
+        <td class="fix">${esc(x.u.nome)}</td>
+        <td>${num(x.t)}</td>
+        <td>${x.n?num(x.t/x.n):'—'}</td>
+        <td>${x.n}</td>
+        <td>${x.c?num(x.c.b):'<span class="vazio">—</span>'}</td>
+        <td>${x.c?mostraVar(x.c.variacao):'<span class="vazio">—</span>'}</td>
+        <td>${x.meta?num(x.meta.valor):'<span class="vazio">—</span>'}</td>
+        <td>${x.meta?(x.t*100/x.meta.valor).toFixed(0)+'%':'<span class="vazio">—</span>'}</td></tr>`).join('')}
+      </tbody>
+      <tfoot><tr class="lin-total"><td class="fix">Total</td><td>${num(r.realizado)}</td>
+        <td>${num(r.media)}</td><td>${r.diasLancados}</td>
+        <td>${cmp?num(cmp.b):'—'}</td><td>${cmp?mostraVar(cmp.variacao):'—'}</td>
+        <td>${r.meta?num(r.meta):'—'}</td>
+        <td>${r.pctMeta!==null?r.pctMeta.toFixed(0)+'%':'—'}</td></tr></tfoot>
+    </table></div>
+  </div>
+
+  ${relTabelaDiaria(ano, mes, unis)}`;
+}
+
+/* A tabela dia a dia vai em página nova — é a que mais ocupa papel — e sai
+   em DOIS blocos, lojas e feiras, do mesmo jeito que a planilha do cliente
+   sempre separou. Não é só estética: uma tabela só, com as 16 unidades de um
+   mês cheio, dá quase 1.300px e não cabe numa folha A4 em pé; sairia cortada
+   na impressão. Dividida, cada metade cabe. */
+function relTabelaDiaria(ano, mes, unis){
+  const datas = datasDoMes(ano, mes);
+  const lojas = unis.filter(ehLoja), feiras = unis.filter(ehFeira);
+  const cel = (d,u) => { const v = valor(d,u.id); return v===null?'<td class="vazio">—</td>':`<td>${num(v)}</td>`; };
+
+  const bloco = (titulo, lista, filtro, comTotalGeral) => {
+    if (!lista.length) return '';
+    return `<div class="bloco rel__quebra">
+      <p class="card__tit" style="margin-bottom:8px">${titulo} — ${MESES[mes-1]} de ${ano}</p>
+      <div class="rolagem"><table>
+        <thead><tr><th class="fix">Dia</th>
+          ${lista.map(u=>`<th>${esc(u.curto)}</th>`).join('')}
+          <th>Subtotal</th>${comTotalGeral?'<th>Total do dia</th>':''}</tr></thead>
+        <tbody>${datas.map(d=>`<tr class="${ehFds(d)?'fds':''}">
+            <td class="fix">${diaDe(d)} ${DIAS_SEM_C[diaSemana(d)]}</td>
+            ${lista.map(u=>cel(d,u)).join('')}
+            <td><b>${num(totalDoDia(d,filtro))}</b></td>
+            ${comTotalGeral?'<td><b>'+num(totalDoDia(d))+'</b></td>':''}</tr>`).join('')}
+        </tbody>
+        <tfoot><tr class="lin-total"><td class="fix">Total</td>
+          ${lista.map(u=>`<td>${num(totalUnidadeMes(u.id,ano,mes))}</td>`).join('')}
+          <td>${num(totalMes(ano,mes,filtro))}</td>
+          ${comTotalGeral?'<td>'+num(totalMes(ano,mes))+'</td>':''}</tr></tfoot>
+      </table></div>
+    </div>`;
+  };
+
+  return bloco('Lojas e quiosques, dia a dia', lojas, ehLoja, !feiras.length)
+       + bloco('Feiras e eventos, dia a dia', feiras, ehFeira, true);
+}
+
+/* ---------- 2. comparativo entre anos ---------- */
+function relAnual(){
+  const f = filtroDe(relUnidade);
+  const anos = ANOS.filter(a => totalAno(a, f) > 0);
+  if (!anos.length) return '<p class="nota">Sem dados para comparar.</p>';
+
+  const cores = { 2024:'#8b96aa', 2025:'#14528c', 2026:'#c2211f' };
+  const barras = MESES.map((_,i)=>{
+    const it = { rot: MES_CURTO[i] };
+    for (const a of anos) it['a'+a] = totalMes(a, i+1, f);
+    return it;
+  });
+  const series = anos.map(a => ({ chave:'a'+a, rot:String(a), cor:cores[a]||'#2c78bd' }));
+  const ultimo = anos[anos.length-1], penultimo = anos[anos.length-2];
+
+  return relCabecalho('Comparativo entre anos', rotuloDe(relUnidade))
+  + `
+  <div class="kpis bloco">
+    ${anos.map(a=>{
+      const t = totalAno(a,f), ant = totalAno(a-1,f);
+      return `<div class="kpi ${a===ultimo?'kpi--destaque':''}">
+        <div class="kpi__rot">${a}</div><div class="kpi__val">${brlCurto(t)}</div>
+        <div class="kpi__pe">${ant?mostraVar(varPct(t,ant))+' contra '+(a-1):mesesDoAno(a).length+' meses'}</div></div>`;
+    }).join('')}
+  </div>
+
+  <div class="card bloco rel__bloco">
+    <div class="card__cab"><p class="card__tit">Mês a mês</p>
+      <p class="card__sub">Cada ano em uma cor.</p></div>
+    <div class="card__corpo">${graficoBarras({ itens:barras, series, altura:250 })}</div>
+  </div>
+
+  <div class="bloco rel__bloco">
+    <p class="card__tit" style="margin-bottom:8px">Faturamento por mês</p>
+    <div class="rolagem"><table>
+      <thead><tr><th class="fix">Mês</th>${anos.map(a=>`<th>${a}</th>`).join('')}
+        <th>${ultimo} × ${penultimo||'—'}</th></tr></thead>
+      <tbody>${MESES.map((m,i)=>{
+        const vals = anos.map(a=>totalMes(a,i+1,f));
+        if (!vals.some(v=>v>0)) return '';
+        const u = vals[vals.length-1], p = vals[vals.length-2];
+        return `<tr><td class="fix">${m[0].toUpperCase()+m.slice(1)}</td>
+          ${vals.map(v=>v?`<td>${num(v)}</td>`:'<td class="vazio">—</td>').join('')}
+          <td>${(u&&p)?mostraVar(varPct(u,p)):'<span class="vazio">—</span>'}</td></tr>`;
+      }).join('')}</tbody>
+      <tfoot><tr class="lin-total"><td class="fix">Total</td>
+        ${anos.map(a=>`<td>${num(totalAno(a,f))}</td>`).join('')}
+        <td>${penultimo?mostraVar(varPct(totalAno(ultimo,f),totalAno(penultimo,f))):'—'}</td>
+      </tr></tfoot>
+    </table></div>
+  </div>
+
+  <div class="bloco rel__quebra">
+    <p class="card__tit" style="margin-bottom:8px">Por unidade, ano a ano</p>
+    <div class="rolagem"><table>
+      <thead><tr><th class="fix">Unidade</th>${anos.map(a=>`<th>${a}</th>`).join('')}<th>Variação</th></tr></thead>
+      <tbody>${UNI.filter(u=>!f||f(u)).map(u=>{
+        const vals = anos.map(a => MESES.reduce((s,_,i)=>s+totalUnidadeMes(u.id,a,i+1),0));
+        if (!vals.some(v=>v>0)) return '';
+        const ult=vals[vals.length-1], pen=vals[vals.length-2];
+        return `<tr><td class="fix">${esc(u.nome)}</td>
+          ${vals.map(v=>v?`<td>${num(v)}</td>`:'<td class="vazio">—</td>').join('')}
+          <td>${(ult&&pen)?mostraVar(varPct(ult,pen)):'<span class="vazio">—</span>'}</td></tr>`;
+      }).join('')}</tbody>
+    </table></div>
+  </div>`;
+}
+
+/* ---------- 3. desempenho por unidade ---------- */
+function relUnidades(){
+  const ano = relAno;
+  const meses = mesesDoAno(ano);
+  if (!meses.length) return `<p class="nota">Nenhum lançamento em ${ano}.</p>`;
+  const total = totalAno(ano);
+
+  const linhas = UNI.filter(u => u.anos.includes(ano)).map(u => {
+    const t = MESES.reduce((s,_,i)=>s+totalUnidadeMes(u.id,ano,i+1),0);
+    const ant = MESES.reduce((s,_,i)=>s+totalUnidadeMes(u.id,ano-1,i+1),0);
+    const dias = meses.reduce((s,m)=>s+diasComVendaNoMes(u.id,ano,m),0);
+    return { u, t, ant, dias, media: dias?t/dias:0, part: t*100/total };
+  }).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
+
+  const barras = linhas.slice(0,12).map(x=>({ rot:x.u.curto, v:x.t,
+    cor: x.u.bloco==='lojas' ? '#14528c' : '#c2211f' }));
+
+  return relCabecalho('Desempenho por unidade — ' + ano, meses.length + ' meses lançados')
+  + `
+  <div class="card bloco rel__bloco">
+    <div class="card__cab"><p class="card__tit">Maiores unidades do ano</p>
+      <p class="card__sub">Azul: lojas e quiosques. Vermelho: feiras e eventos.</p></div>
+    <div class="card__corpo">${graficoBarras({ itens:barras, altura:230 })}</div>
+  </div>
+
+  <div class="bloco rel__bloco">
+    <div class="rolagem"><table>
+      <thead><tr><th class="fix">Unidade</th><th style="text-align:left">Tipo</th>
+        <th>${ano}</th><th>${ano-1}</th><th>Variação</th><th>Média/dia</th><th>Dias</th><th>% da rede</th></tr></thead>
+      <tbody>${linhas.map(x=>`<tr>
+        <td class="fix">${esc(x.u.nome)}</td>
+        <td style="text-align:left">${x.u.bloco==='lojas'?'Loja':'Feira'}</td>
+        <td>${num(x.t)}</td>
+        <td>${x.ant?num(x.ant):'<span class="vazio">—</span>'}</td>
+        <td>${x.ant?mostraVar(varPct(x.t,x.ant)):'<span class="vazio">—</span>'}</td>
+        <td>${num(x.media)}</td><td>${x.dias}</td>
+        <td>${x.part.toFixed(1)}%</td></tr>`).join('')}</tbody>
+      <tfoot><tr class="lin-total"><td class="fix">Total da rede</td><td></td>
+        <td>${num(total)}</td><td>${num(totalAno(ano-1))}</td>
+        <td>${totalAno(ano-1)?mostraVar(varPct(total,totalAno(ano-1))):'—'}</td>
+        <td></td><td></td><td>100%</td></tr></tfoot>
+    </table></div>
+  </div>`;
+}
+
+/* ---------- 4. dia da semana ---------- */
+function relSemana(){
+  const ano = relAno, f = filtroDe(relUnidade);
+  const datas = DATAS.filter(d => anoDe(d) === ano);
+  if (!datas.length) return `<p class="nota">Nenhum lançamento em ${ano}.</p>`;
+  const datasAnt = DATAS.filter(d => anoDe(d) === ano-1);
+
+  const porDs = DIAS_SEM.map((nome,i)=>{
+    const a = datas.filter(d=>diaSemana(d)===i), b = datasAnt.filter(d=>diaSemana(d)===i);
+    const sa = a.reduce((s,d)=>s+totalDoDia(d,f),0), sb = b.reduce((s,d)=>s+totalDoDia(d,f),0);
+    return { nome, curto:DIAS_SEM_C[i], n:a.length, soma:sa,
+             media:a.length?sa/a.length:0, mediaAnt:b.length?sb/b.length:0 };
+  });
+  const somaSemana = porDs.reduce((s,x)=>s+x.soma,0) || 1;
+  const maior = Math.max(...porDs.map(x=>x.media));
+  const temAnt = porDs.some(x=>x.mediaAnt>0);
+  const barras = porDs.map(x=>({ rot:x.curto, rot2:x.n+'x',
+    ['a'+ano]:Math.round(x.media), ['a'+(ano-1)]:Math.round(x.mediaAnt) }));
+  const series = [ ...(temAnt?[{chave:'a'+(ano-1),rot:String(ano-1),cor:'#8b96aa'}]:[]),
+                   {chave:'a'+ano,rot:String(ano),cor:'#c2211f'} ];
+  const fds = porDs.filter((_,i)=>[0,5,6].includes(i)).reduce((s,x)=>s+x.soma,0);
+
+  return relCabecalho('Dia da semana — ' + ano, rotuloDe(relUnidade))
+  + `
+  <div class="card bloco rel__bloco">
+    <div class="card__cab"><p class="card__tit">Média por dia da semana</p>
+      <p class="card__sub">Comparar sábado com terça não diz nada; sábado com sábado, sim.</p></div>
+    <div class="card__corpo">${graficoBarras({ itens:barras, series, altura:220 })}</div>
+  </div>
+
+  <div class="bloco rel__bloco">
+    <div class="rolagem"><table>
+      <thead><tr><th class="fix">Dia</th><th>Média ${ano}</th>${temAnt?'<th>Média '+(ano-1)+'</th><th>Variação</th>':''}
+        <th>Total no ano</th><th>% da semana</th><th>Ocorrências</th></tr></thead>
+      <tbody>${porDs.map(x=>`<tr>
+        <td class="fix">${x.nome}${x.media===maior?' (melhor)':''}</td>
+        <td>${num(x.media)}</td>
+        ${temAnt?'<td>'+(x.mediaAnt?num(x.mediaAnt):'—')+'</td><td>'+(x.mediaAnt?mostraVar(varPct(x.media,x.mediaAnt)):'—')+'</td>':''}
+        <td>${num(x.soma)}</td><td>${(x.soma*100/somaSemana).toFixed(1)}%</td><td>${x.n}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <p class="nota">O fim de semana (sexta a domingo) responde por
+    ${(fds*100/somaSemana).toFixed(0)}% do faturamento do ano.</p>
+  </div>`;
+}
+
+const REL_MONTA = { mensal:relMensal, anual:relAnual, unidades:relUnidades, semana:relSemana };
+
+function telaRelatorios(){
+  const precisaMes = relTipo === 'mensal';
+  const precisaAno = relTipo !== 'anual';
+  return `
+  <h2 class="titulo">Relatórios</h2>
+  <p class="sub">Prontos para imprimir. Escolha o relatório e o período; use
+  <b>Ver como vai imprimir</b> para conferir a folha antes de mandar para a impressora.</p>
+
+  <div class="controles rel__acoes">
+    <div class="campo"><span>Relatório</span>
+      <select onchange="relTipo=this.value;render()">
+        ${Object.entries(REL_TIPOS).map(([k,v])=>`<option value="${k}" ${k===relTipo?'selected':''}>${v}</option>`).join('')}
+      </select></div>
+    ${precisaAno?`<div class="campo"><span>Ano</span>
+      <select onchange="relAno=+this.value;render()">
+        ${ANOS.map(a=>`<option value="${a}" ${a===relAno?'selected':''}>${a}</option>`).join('')}
+      </select></div>`:''}
+    ${precisaMes?`<div class="campo"><span>Mês</span>
+      <select onchange="relMes=+this.value;render()">
+        ${MESES.map((m,i)=>`<option value="${i+1}" ${i+1===relMes?'selected':''} ${datasDoMes(relAno,i+1).length?'':'disabled'}>${m[0].toUpperCase()+m.slice(1)}</option>`).join('')}
+      </select></div>`:''}
+    <div class="campo"><span>Unidade</span>
+      ${seletorUnidade(relUnidade, 'relUnidade=this.value;render()')}</div>
+    <div class="campo"><span>&nbsp;</span>
+      <button class="btn" onclick="previaImpressao()">Ver como vai imprimir</button></div>
+    <div class="campo"><span>&nbsp;</span>
+      <button class="btn btn--primario" onclick="window.print()">Imprimir</button></div>
+  </div>
+
+  <div id="relDoc">${REL_MONTA[relTipo]()}</div>`;
+}
+
+/* Mostra na tela exatamente o que vai para o papel. Sai com Esc ou pelo botão. */
+function previaImpressao(){
+  document.body.classList.add('modo-impressao');
+  if (!document.getElementById('barraPrevia')){
+    const barra = document.createElement('div');
+    barra.id = 'barraPrevia';
+    barra.innerHTML = '<span>Prévia da impressão</span>'
+      + '<button class="btn btn--pequeno" onclick="window.print()">Imprimir</button>'
+      + '<button class="btn btn--pequeno" onclick="fecharPrevia()">Voltar (Esc)</button>';
+    document.body.appendChild(barra);
+  }
+  window.scrollTo({ top:0 });
+}
+function fecharPrevia(){
+  document.body.classList.remove('modo-impressao');
+  const b = document.getElementById('barraPrevia');
+  if (b) b.remove();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharPrevia(); });
+
+/* A classe entra sozinha na impressão de verdade — inclusive quando a pessoa
+   usa Ctrl+P direto, sem passar pela prévia. */
+window.addEventListener('beforeprint', () => document.body.classList.add('modo-impressao'));
+window.addEventListener('afterprint', () => {
+  if (!document.getElementById('barraPrevia')) document.body.classList.remove('modo-impressao');
+});
+
+/* ================================================================
    8. CADASTROS
    ================================================================ */
 function telaCadastros(){
@@ -1753,7 +2113,7 @@ function sortearSenha(){
    9. NAVEGAÇÃO
    ================================================================ */
 const TELAS = { painel:telaPainel, lancar:telaLancar, mensal:telaMensal, anual:telaAnual,
-                comparar:telaComparar, metas:telaMetas, cadastros:telaCadastros, acessos:telaAcessos };
+                comparar:telaComparar, relatorios:telaRelatorios, metas:telaMetas, cadastros:telaCadastros, acessos:telaAcessos };
 let secaoAtual = 'painel';
 
 function render(){
