@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- A página tem faturamento real do cliente: fora de buscadores. -->
 <meta name="robots" content="noindex, nofollow, noarchive">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <title>Dashboard Cameron</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -279,7 +280,7 @@ code{background:var(--surface-2); padding:1.5px 6px; border-radius:5px; font-siz
 .login[hidden]{display:none}
 .login__caixa{width:100%; max-width:400px; background:var(--surface); border:1px solid var(--line);
   border-radius:var(--radius); box-shadow:var(--shadow-alta); padding:30px 28px 26px}
-.login__marca{display:flex; align-items:center; gap:11px; margin-bottom:22px}
+.login__marca{display:flex; flex-direction:column; align-items:flex-start; gap:14px; margin-bottom:24px}
 .login__marca b{font-family:var(--fonte-titulo); font-optical-sizing:auto; font-weight:600;
   font-size:19px; letter-spacing:-.2px}
 .login__marca span{display:block; font-size:11.5px; color:var(--text-dim); font-weight:400}
@@ -392,6 +393,16 @@ body.modo-impressao .rel__cabecalho .rel__meta{ font-size:10px; color:var(--text
 body.modo-impressao .rel__quebra table{ font-size:8.5px; }
 body.modo-impressao .rel__quebra th, body.modo-impressao .rel__quebra td{ padding:2px 3px; }
 
+
+/* o logo no cabecalho do relatorio impresso */
+body.modo-impressao .rel__cabecalho h1{ display:none; }
+.rel__logo{ width:132px; height:auto; display:block; }
+
+
+/* o titulo da tela e a instrucao de uso sao de tela, nao de papel */
+body.modo-impressao #sec-relatorios > h2.titulo,
+body.modo-impressao #sec-relatorios > .sub{ display:none; }
+
 /* barra da previa de impressao: some no papel, so existe na tela */
 #barraPrevia{position:fixed; top:0; left:0; right:0; z-index:200; display:flex; gap:10px;
   align-items:center; justify-content:center; padding:8px 14px;
@@ -474,11 +485,8 @@ body.modo-impressao{padding-top:46px}
 <div class="login" id="login" hidden>
   <form class="login__caixa" id="formLogin" autocomplete="on">
     <div class="login__marca">
-      <svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true">
-        <path d="M8 6h32a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H22l-10 8v-8H8a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z"
-              fill="#c2211f" stroke="var(--surface)" stroke-width="2.5" stroke-linejoin="round"/>
-      </svg>
-      <div><b>Dashboard Cameron</b><span>Fechamento diário da rede</span></div>
+      <img src="logo-cameron.svg" alt="Cameron — Livros e Revistas" width="150" style="display:block">
+      <div><b>Dashboard</b><span>Fechamento diário da rede</span></div>
     </div>
 
     <div class="login__campo">

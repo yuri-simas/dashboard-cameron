@@ -1457,8 +1457,8 @@ function relCabecalho(titulo, periodo){
   const agora = new Date();
   const q = n => String(n).padStart(2,'0');
   return '<div class="rel__cabecalho"><div>'
-    + '<h1>Livraria Cameron</h1>'
-    + '<div style="font-size:12px;font-weight:600">' + esc(titulo) + '</div></div>'
+    + '<img src="logo-cameron.svg" alt="Cameron — Livros e Revistas" class="rel__logo">'
+    + '<div style="font-size:12px;font-weight:600;margin-top:6px">' + esc(titulo) + '</div></div>'
     + '<div class="rel__meta">' + esc(periodo) + '<br>emitido em '
     + q(agora.getDate()) + '/' + q(agora.getMonth()+1) + '/' + agora.getFullYear()
     + ' às ' + q(agora.getHours()) + ':' + q(agora.getMinutes()) + '<br>'

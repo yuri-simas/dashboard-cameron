@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 268 132" role="img" aria-label="Cameron — Livros e Revistas">
+  <title>Cameron — Livros e Revistas</title>
+  <!--
+    Balão de fala vermelho com contorno azul, wordmark em caixa baixa e a
+    assinatura "LIVROS E REVISTAS" embaixo, à direita.
+
+    O textLength trava a largura das duas palavras: assim o desenho fica do
+    mesmo tamanho em qualquer máquina, mesmo que a fonte usada mude. Sem isso,
+    o logo encolhe ou estoura conforme a fonte que o computador tiver.
+  -->
+  <path d="M50 6h168a44 44 0 0 1 0 88h-96l-26 32-6-32H50a44 44 0 0 1 0-88Z"
+        fill="#c2211f" stroke="#14528c" stroke-width="12" stroke-linejoin="round"/>
+  <text x="134" y="64" text-anchor="middle" fill="#fff"
+        font-family="'Trebuchet MS', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="46" font-weight="700" letter-spacing="-1"
+        textLength="176" lengthAdjust="spacingAndGlyphs">cameron</text>
+  <text x="222" y="82" text-anchor="end" fill="#fff"
+        font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="10" font-weight="600"
+        textLength="88" lengthAdjust="spacingAndGlyphs">LIVROS E REVISTAS</text>
+</svg>
