@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 268 118" role="img" aria-label="Cameron">
+  <title>Cameron</title>
+  <!--
+    Versão reduzida, para uso em tamanho pequeno (barra do topo).
+    Sai a assinatura "LIVROS E REVISTAS": abaixo de uns 130px de largura ela
+    fica com menos de 4px de altura e vira borrão. É melhor não ter do que ter
+    ilegível. O wordmark ganha o espaço que sobra e fica centrado no balão.
+  -->
+  <path d="M50 6h168a44 44 0 0 1 0 88h-96l-26 24-6-24H50a44 44 0 0 1 0-88Z"
+        fill="#c2211f" stroke="#14528c" stroke-width="12" stroke-linejoin="round"/>
+  <text x="134" y="67" text-anchor="middle" fill="#fff"
+        font-family="'Trebuchet MS', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="50" font-weight="700" letter-spacing="-1"
+        textLength="184" lengthAdjust="spacingAndGlyphs">cameron</text>
+</svg>

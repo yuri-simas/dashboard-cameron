@@ -36,6 +36,7 @@
   --topo:#0c2440; --topo-txt:#ffffff; --topo-dim:#9db3d3; --topo-linha:rgba(255,255,255,.14);
 
   --radius:16px; --radius-p:10px;
+  --altura-topo:69px;
   --fonte-titulo:"Fraunces",Georgia,"Times New Roman",serif;
   --fonte-ui:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
 }
@@ -96,7 +97,7 @@ button,input,select{font:inherit;color:inherit}
   border-bottom:1px solid var(--topo-linha)}
 .topo__linha{max-width:1400px; margin:0 auto; padding:11px 20px; display:flex; align-items:center; gap:14px}
 .marca{display:flex; align-items:center; gap:11px; min-width:0}
-.marca svg{flex:none}
+.marca__logo{flex:none; width:104px; height:auto; display:block}
 .marca__nome{font-family:var(--fonte-titulo); font-optical-sizing:auto; font-weight:600;
   font-size:17px; letter-spacing:-.1px; line-height:1.15}
 .marca__sub{font-size:11px; color:var(--topo-dim); line-height:1.25; letter-spacing:.2px}
@@ -111,7 +112,7 @@ button,input,select{font:inherit;color:inherit}
 .btn-tema:hover{background:rgba(255,255,255,.18); border-color:rgba(255,255,255,.3)}
 
 /* ============================================================ ABAS */
-.abas{background:var(--surface); border-bottom:1px solid var(--line); position:sticky; top:57px; z-index:35}
+.abas{background:var(--surface); border-bottom:1px solid var(--line); position:sticky; top:var(--altura-topo); z-index:35}
 .abas__int{max-width:1400px; margin:0 auto; display:flex; gap:2px; overflow-x:auto; padding:0 14px}
 .abas__int::-webkit-scrollbar{height:0}
 .aba{background:none; border:0; cursor:pointer; position:relative;
@@ -414,12 +415,13 @@ body.modo-impressao{padding-top:46px}
 @media print{ #barraPrevia{display:none !important} body.modo-impressao{padding-top:0} }
 
 @media (max-width:640px){
+  :root{ --altura-topo:67px; }   /* o topo encolhe no celular */
   .topo__linha{padding:10px 14px}
   .marca__sub,.hoje{display:none}
   .pagina{padding:18px 14px 56px}
   h2.titulo{font-size:23px}
   .kpi__val{font-size:26px}
-  .abas{top:57px}
+  .abas{top:var(--altura-topo)}
   .rodape-fixo{gap:14px; padding:12px 15px}
   .rodape-fixo .item b{font-size:17px}
   .rodape-fixo .item.grande b{font-size:21px}
@@ -434,12 +436,9 @@ body.modo-impressao{padding-top:46px}
 <header class="topo">
   <div class="topo__linha">
     <div class="marca">
-      <svg width="30" height="30" viewBox="0 0 48 48" aria-hidden="true">
-        <path d="M8 6h32a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H22l-10 8v-8H8a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z"
-              fill="#c2211f" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round"/>
-      </svg>
+      <img src="logo-cameron-compacto.svg" alt="Cameron" class="marca__logo">
       <div>
-        <div class="marca__nome">Dashboard Cameron</div>
+        <div class="marca__nome">Dashboard</div>
         <div class="marca__sub">Fechamento diário da rede</div>
       </div>
     </div>
