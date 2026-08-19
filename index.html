@@ -404,6 +404,12 @@ body.modo-impressao .rel__cabecalho h1{ display:none; }
 body.modo-impressao #sec-relatorios > h2.titulo,
 body.modo-impressao #sec-relatorios > .sub{ display:none; }
 
+
+/* unidade desativada: continua na lista, mas visivelmente apagada */
+.uni--inativa td{ opacity:.55; }
+.uni--inativa .fix{ opacity:.55; }
+#formUnidade .campo input, #formUnidade .campo select{ min-height:38px }
+
 /* barra da previa de impressao: some no papel, so existe na tela */
 #barraPrevia{position:fixed; top:0; left:0; right:0; z-index:200; display:flex; gap:10px;
   align-items:center; justify-content:center; padding:8px 14px;
@@ -609,7 +615,10 @@ async function carregarDados(){
     }
     u.primeiro = ini; u.ultimo = fim; u.diasComVenda = n;
     u.anos = [...anosU].sort();
-    u.ativa = anosU.has(anoAtual);
+    // "ativa" é decisão de cadastro e vem do banco — não se deduz do movimento.
+    // Deduzir apagaria a escolha de quem desativa uma loja que ainda vendeu
+    // este ano, e reativaria sozinho no ano seguinte.
+    u.temMovimentoNoAno = anosU.has(anoAtual);
   }
 
   const hoje = new Date();

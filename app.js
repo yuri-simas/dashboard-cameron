@@ -1801,15 +1801,44 @@ window.addEventListener('afterprint', () => {
    8. CADASTROS
    ================================================================ */
 function telaCadastros(){
-  const linhaUni = u => `<tr>
-    <td class="fix">${esc(u.nome)}</td>
-    <td style="text-align:left"><span class="tag">${esc(u.tipo)}</span></td>
-    <td style="text-align:left"><span class="tag ${u.bloco==='lojas'?'tag--loja':'tag--feira'}">${u.bloco==='lojas'?'Lojas':'Feiras'}</span></td>
-    <td style="text-align:left">${u.grupo?esc(u.grupo):'<span class="vazio">—</span>'}</td>
-    <td style="text-align:left">${u.ativa?'<span class="up">Ativa</span>':'<span class="vazio">Inativa</span>'}</td>
-    <td style="text-align:left">${u.anos.join(', ')}</td>
-    <td>${u.primeiro?dataBr(u.primeiro)+'/'+anoDe(u.primeiro).toString().slice(2)+' a '+dataBr(u.ultimo)+'/'+anoDe(u.ultimo).toString().slice(2):'—'}</td>
-    <td>${u.diasComVenda||0}</td></tr>`;
+  const podeEditar = D.eu && D.eu.papel === 'diretoria';
+  const grupos = [...new Set(UNI.filter(u=>u.grupo).map(u=>u.grupo))].sort();
+
+  /* Cada célula grava sozinha ao sair, como no lançamento e nas metas.
+     Quem não é diretoria vê a mesma tabela, só que sem poder mexer. */
+  const campoTexto = (u, campo, largura) => podeEditar
+    ? `<input type="text" value="${esc(u[campo]||'')}" style="width:${largura}px"
+             data-uni-campo="${campo}" data-uni-id="${u.id}"
+             aria-label="${campo} de ${esc(u.nome)}" onchange="salvarUnidade(this)">`
+    : esc(u[campo] || '—');
+
+  const campoLista = (u, campo, opcoes) => podeEditar
+    ? `<select data-uni-campo="${campo}" data-uni-id="${u.id}" onchange="salvarUnidade(this)"
+              aria-label="${campo} de ${esc(u.nome)}">
+        ${opcoes.map(([v,r])=>`<option value="${esc(v)}" ${u[campo]===v?'selected':''}>${esc(r)}</option>`).join('')}
+       </select>`
+    : esc(u[campo] || '—');
+
+  const linhaUni = u => `<tr class="${u.ativa?'':'uni--inativa'}">
+    <td class="fix">${campoTexto(u,'nome',180)}</td>
+    <td style="text-align:left">${campoTexto(u,'curto',96)}</td>
+    <td style="text-align:left">${campoLista(u,'tipo',[['Loja','Loja'],['Quiosque','Quiosque'],['Feira','Feira']])}</td>
+    <td style="text-align:left">${campoLista(u,'bloco',[['lojas','Lojas'],['feiras','Feiras']])}</td>
+    <td style="text-align:left">${podeEditar
+      ? `<input type="text" list="listaGrupos" value="${esc(u.grupo||'')}" style="width:104px" placeholder="—"
+               data-uni-campo="grupo" data-uni-id="${u.id}" aria-label="Grupo de ${esc(u.nome)}"
+               onchange="salvarUnidade(this)">`
+      : (u.grupo?esc(u.grupo):'<span class="vazio">—</span>')}</td>
+    <td style="text-align:left">${podeEditar
+      ? `<button type="button" class="chip" aria-pressed="${!!u.ativa}" data-uni-id="${u.id}"
+                onclick="alternarAtiva(this)"
+                title="${u.ativa?'Desativar: some das telas de lançamento, histórico fica':'Reativar'}">
+          ${u.ativa?'Ativa':'Inativa'}</button>`
+      : (u.ativa?'<span class="up">Ativa</span>':'<span class="vazio">Inativa</span>')}</td>
+    <td style="text-align:left">${u.anos.length?u.anos.join(', '):'<span class="vazio">—</span>'}</td>
+    <td>${u.primeiro?dataBr(u.primeiro)+'/'+anoDe(u.primeiro).toString().slice(2)+' a '+dataBr(u.ultimo)+'/'+anoDe(u.ultimo).toString().slice(2):'<span class="vazio">—</span>'}</td>
+    <td>${u.diasComVenda||0}</td>
+    <td class="lanc__recado" data-recado-uni="${u.id}"></td></tr>`;
 
   const conf = D.conferencia;
   const batem = conf.filter(c => Math.abs(c.dif) <= 1).length;
@@ -1819,18 +1848,49 @@ function telaCadastros(){
   <h2 class="titulo">Cadastros</h2>
   <p class="sub">Some a ideia de "coluna da planilha". Cada unidade é um cadastro, e por isso nada quebra quando uma feira abre, fecha ou troca de nome.</p>
 
+  <datalist id="listaGrupos">${grupos.map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+
+  ${podeEditar ? `<div class="card bloco">
+    <div class="card__cab"><p class="card__tit">Nova unidade</p>
+      <p class="card__sub">Loja, quiosque ou feira. Depois de criada, ela já aparece na tela de lançamento.</p></div>
+    <div class="card__corpo">
+      <form id="formUnidade" onsubmit="criarUnidade(event)" autocomplete="off">
+        <div class="controles" style="align-items:flex-end;margin-bottom:0">
+          <div class="campo"><span>Nome</span>
+            <input id="unNome" type="text" required placeholder="Bourbon Ipiranga" style="width:200px"
+                   oninput="sugerirCurto()"></div>
+          <div class="campo"><span>Nome curto</span>
+            <input id="unCurto" type="text" required placeholder="Ipiranga" style="width:120px"></div>
+          <div class="campo"><span>Tipo</span>
+            <select id="unTipo" onchange="tipoSugereBloco()">
+              <option value="Loja">Loja</option><option value="Quiosque">Quiosque</option>
+              <option value="Feira">Feira</option></select></div>
+          <div class="campo"><span>Bloco</span>
+            <select id="unBloco"><option value="lojas">Lojas</option><option value="feiras">Feiras</option></select></div>
+          <div class="campo"><span>Grupo (opcional)</span>
+            <input id="unGrupo" type="text" list="listaGrupos" placeholder="ex.: Aeroporto" style="width:130px"></div>
+          <div class="campo"><span>&nbsp;</span>
+            <button type="submit" class="btn btn--primario" id="unBotao">Criar unidade</button></div>
+        </div>
+        <p class="nota" id="unAviso" role="alert"></p>
+      </form>
+    </div>
+  </div>` : ''}
+
   <div class="bloco">
-    <p class="card__tit" style="margin-bottom:8px">Unidades (${UNI.length})</p>
+    <p class="card__tit" style="margin-bottom:8px">Unidades — ${UNI.filter(u=>u.ativa).length} ativas de ${UNI.length}</p>
     <div class="rolagem">
       <table>
-        <thead><tr><th class="fix">Nome</th><th style="text-align:left">Tipo</th><th style="text-align:left">Bloco</th>
-        <th style="text-align:left">Grupo</th><th style="text-align:left">Situação</th><th style="text-align:left">Anos</th>
-        <th>Período</th><th>Dias</th></tr></thead>
+        <thead><tr><th class="fix">Nome</th><th style="text-align:left">Curto</th><th style="text-align:left">Tipo</th>
+        <th style="text-align:left">Bloco</th><th style="text-align:left">Grupo</th><th style="text-align:left">Situação</th>
+        <th style="text-align:left">Anos</th><th>Período com venda</th><th>Dias</th><th></th></tr></thead>
         <tbody>${UNI.filter(ehLoja).map(linhaUni).join('')}${UNI.filter(ehFeira).map(linhaUni).join('')}</tbody>
       </table>
     </div>
-    <p class="nota">As unidades sem movimento em 2026 entram como <b>inativas</b>: não aparecem na tela de lançamento,
-    mas o histórico continua guardado e volta a aparecer nas comparações com 2024 e 2025.</p>
+    <p class="nota">Clique em <b>Ativa/Inativa</b> para trocar. Desativar <b>não apaga nada</b>: a unidade some da tela
+    de lançamento e para de entrar como pendência, mas todo o histórico dela continua nas comparações e nos relatórios.
+    É assim que uma loja fecha sem sumir do passado — e por isso não existe botão de excluir.
+    ${podeEditar?'Os demais campos gravam ao sair.':'Só a diretoria pode alterar.'}</p>
   </div>
 
   ${historico.length ? `<div class="bloco">
@@ -2107,6 +2167,130 @@ function sortearSenha(){
   campo.value = s;
   campo.focus();
   campo.select();
+}
+
+
+/* ---------- cadastro de unidades ----------
+   Alterar unidade mexe em tudo: bloco muda subtotal, nome muda relatório.
+   Por isso grava campo a campo, com recado na própria linha, e só para
+   quem é diretoria — as políticas do banco recusariam de qualquer forma,
+   mas é melhor a tela nem oferecer.                                      */
+
+function recadoUni(id, texto, some){
+  const cel = document.querySelector(`[data-recado-uni="${id}"]`);
+  if (!cel) return;
+  cel.textContent = texto;
+  if (some) setTimeout(() => { if (cel.isConnected && cel.textContent === texto) cel.textContent = ''; }, 1500);
+}
+
+async function gravarUnidade(id, campos){
+  if (!SB) throw new Error('Sem ligação com o banco.');
+  const { error } = await SB.from('unidades').update(campos).eq('id', id);
+  if (error) throw error;
+  Object.assign(porId.get(id), campos);
+}
+
+async function salvarUnidade(el){
+  const id = el.dataset.uniId, campo = el.dataset.uniCampo;
+  let valor = el.value.trim();
+
+  if ((campo === 'nome' || campo === 'curto') && !valor){
+    recadoUni(id, 'não pode ficar em branco');
+    el.value = porId.get(id)[campo] || '';
+    return;
+  }
+  if (campo === 'grupo' && !valor) valor = null;
+
+  recadoUni(id, 'salvando…');
+  try {
+    await gravarUnidade(id, { [campo]: valor });
+    recadoUni(id, 'salvo', true);
+    // bloco e nome aparecem em toda tela: vale redesenhar
+    if (campo === 'bloco' || campo === 'nome' || campo === 'curto') render();
+  } catch(e){
+    recadoUni(id, explicarErroLancamento(e));
+  }
+}
+
+async function alternarAtiva(botao){
+  const id = botao.dataset.uniId;
+  const u = porId.get(id);
+  const virar = !u.ativa;
+
+  if (!virar && u.temMovimentoNoAno &&
+      !confirm(`${u.nome} teve venda lançada este ano.\n\n`
+        + 'Desativar tira ela da tela de lançamento e da lista de pendências. '
+        + 'O histórico continua guardado e segue aparecendo nas comparações e relatórios.\n\nDesativar mesmo assim?')) return;
+
+  recadoUni(id, 'salvando…');
+  try {
+    await gravarUnidade(id, { ativa: virar });
+    render();
+  } catch(e){
+    recadoUni(id, explicarErroLancamento(e));
+  }
+}
+
+/* O id é a chave da unidade no banco e aparece em todo lançamento, então
+   não se pede para a pessoa digitar: sai do nome, sem acento nem espaço. */
+function idDoNome(nome){
+  const base = nome.normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0,24) || 'unidade';
+  if (!porId.has(base)) return base;
+  for (let i = 2; i < 99; i++) if (!porId.has(base + i)) return base + i;
+  return base + Date.now().toString().slice(-4);
+}
+
+function sugerirCurto(){
+  const nome = document.getElementById('unNome').value.trim();
+  const curto = document.getElementById('unCurto');
+  if (!curto.dataset.tocado){
+    // pega a última palavra significativa: "Bourbon Ipiranga" vira "Ipiranga"
+    const partes = nome.split(/\s+/).filter(p => p.length > 2);
+    curto.value = partes.length ? partes[partes.length-1] : nome;
+  }
+}
+function tipoSugereBloco(){
+  const tipo = document.getElementById('unTipo').value;
+  const bloco = document.getElementById('unBloco');
+  if (!bloco.dataset.tocado) bloco.value = tipo === 'Feira' ? 'feiras' : 'lojas';
+}
+
+async function criarUnidade(ev){
+  ev.preventDefault();
+  const nome  = document.getElementById('unNome').value.trim();
+  const curto = document.getElementById('unCurto').value.trim();
+  const tipo  = document.getElementById('unTipo').value;
+  const bloco = document.getElementById('unBloco').value;
+  const grupo = document.getElementById('unGrupo').value.trim() || null;
+  const aviso = document.getElementById('unAviso');
+  const botao = document.getElementById('unBotao');
+
+  if (UNI.some(u => u.nome.toLowerCase() === nome.toLowerCase())){
+    aviso.textContent = 'Já existe uma unidade com esse nome.';
+    return;
+  }
+  if (!SB){ aviso.textContent = 'Sem ligação com o banco.'; return; }
+
+  botao.disabled = true; botao.textContent = 'Criando…';
+  aviso.textContent = '';
+  const nova = { id: idDoNome(nome), nome, curto, tipo, bloco, grupo,
+                 ativa: true, ordem: UNI.length + 1 };
+
+  const { error } = await SB.from('unidades').insert(nova);
+  botao.disabled = false; botao.textContent = 'Criar unidade';
+
+  if (error){ aviso.textContent = explicarErroLancamento(error); return; }
+
+  // entra no modelo já com os campos derivados que o resto do app espera
+  Object.assign(nova, { anos: [], primeiro: null, ultimo: null,
+                        diasComVenda: 0, temMovimentoNoAno: false });
+  UNI.push(nova);
+  porId.set(nova.id, nova);
+  document.getElementById('formUnidade').reset();
+  render();
+  const a = document.getElementById('unAviso');
+  if (a) a.textContent = `${nome} criada. Já aparece na tela de lançamento.`;
 }
 
 /* ================================================================
