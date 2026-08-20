@@ -690,6 +690,33 @@ async function entrarNoApp(){
   }
 }
 
+/* Quando o login falha por rede, a mensagem crua ("Failed to fetch") não
+   ajuda ninguém no balcão. Isto testa o que dá para testar do navegador e
+   devolve um recado que a pessoa consegue repassar para quem cuida da TI. */
+async function diagnosticarRede(){
+  mostrarErro('Sem resposta do servidor. Testando a conexão…');
+  const alvo = (CFG.url || '') + '/auth/v1/health';
+  let chegou = false;
+  try {
+    await fetch(alvo, { method:'GET', mode:'no-cors', cache:'no-store' });
+    chegou = true;               // no-cors não deixa ler a resposta, mas o pedido saiu
+  } catch(e){ chegou = false; }
+
+  const dominio = (CFG.url || '').replace('https://','');
+  if (chegou){
+    mostrarErro('A conexão respondeu agora. Pode ter sido uma queda momentânea — '
+      + 'tente entrar de novo. Se repetir, avise que o endereço é ' + dominio + '.');
+  } else {
+    elErro.innerHTML = '<b>Este computador não está conseguindo falar com o servidor.</b><br><br>'
+      + 'A página abriu, então a internet funciona — o que está bloqueado é só o endereço do banco de dados. '
+      + 'Quase sempre é o firewall ou o antivírus da loja.<br><br>'
+      + 'O que pedir para quem cuida da TI:<br>'
+      + '<b>liberar o endereço ' + dominio + '</b> (e, se possível, <b>*.supabase.co</b>).<br><br>'
+      + 'Para confirmar que é isso: abra o app pelo <b>4G do celular</b>. Se funcionar lá, é a rede da loja.';
+    elErro.hidden = false;
+  }
+}
+
 document.getElementById('formLogin').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   limparErro();
@@ -705,9 +732,16 @@ document.getElementById('formLogin').addEventListener('submit', async (ev) => {
   btnEntrar.disabled = false;
   btnEntrar.textContent = 'Entrar';
   if (error){
-    mostrarErro(/invalid/i.test(error.message)
-      ? 'E-mail ou senha não conferem.'
-      : 'Não consegui entrar: ' + error.message);
+    if (/invalid|credentials/i.test(error.message)){
+      mostrarErro('E-mail ou senha não conferem.');
+    } else if (/failed to fetch|networkerror|load failed|network request/i.test(error.message)){
+      // "Failed to fetch" é o navegador dizendo que nem chegou no servidor.
+      // Como a página abriu, a internet existe: quase sempre é a rede do
+      // local barrando o endereço do banco. Vale testar e dizer o que fazer.
+      await diagnosticarRede();
+    } else {
+      mostrarErro('Não consegui entrar: ' + error.message);
+    }
     return;
   }
   document.getElementById('loginSenha').value = '';
